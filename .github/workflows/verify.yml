@@ -1,0 +1,38 @@
+name: Verificar frontend
+
+on:
+    pull_request:
+    push:
+        branches: [main]
+
+jobs:
+    verify:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v5
+              with:
+                  fetch-depth: 0
+
+            # El contrato vive en un repo privado aparte (flu3nce-contract). El token del
+            # workflow no puede leerlo, así que se usa el secreto CONTRACT_READ_TOKEN:
+            # un token de GitHub con permiso de solo lectura sobre ese repo.
+            # Cómo crearlo: CONTRIBUTING.md, sección «Verificación en GitHub».
+            - name: Traer el contrato
+              env:
+                  CONTRACT_READ_TOKEN: ${{ secrets.CONTRACT_READ_TOKEN }}
+              run: |
+                  if [ -z "$CONTRACT_READ_TOKEN" ]; then
+                      echo "::error::Falta el secreto CONTRACT_READ_TOKEN (lectura de flu3nce-contract). Ver CONTRIBUTING.md."
+                      exit 1
+                  fi
+                  git config --global url."https://x-access-token:${CONTRACT_READ_TOKEN}@github.com/".insteadOf "https://github.com/"
+                  git submodule update --init --recursive
+                  git -C contract fetch origin main
+
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: "22"
+                  cache: npm
+
+            - run: npm ci
+            - run: npm run verify:production

@@ -1,0 +1,52 @@
+/*
+ * Optimizaciones de rendimiento de la landing.
+ * Se carga DESPUÉS de landing.css para sobreescribir los efectos más costosos
+ * sin tocar el CSS generado (landing.css) ni el original vendorizado.
+ *
+ * Causa raíz del lag: 3 "orbs" de 400-800px con filter:blur(100px) animándose
+ * en bucle. El glow real ya lo da el radial-gradient de cada orb, así que el blur
+ * gigante es casi redundante; y la animación con scale forzaba re-rasterizar la
+ * capa borrosa en cada frame.
+ */
+
+/* Orbs → capa propia en GPU + blur mucho menor (el radial-gradient ya da el difuminado). */
+.flu3nce-landing .bg-orb {
+    filter: blur(40px);
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+
+/* Animar SOLO traslación (translate3d, sin scale) evita re-rasterizar el blur cada frame:
+   la capa se compone en el hilo del compositor (suave y barato). */
+@keyframes flu3nce-drift {
+    0% {
+        transform: translate3d(0, 0, 0);
+    }
+    100% {
+        transform: translate3d(40px, 50px, 0);
+    }
+}
+
+/* Aísla el repintado del fondo fijo del resto del documento. */
+.flu3nce-landing .bg-canvas {
+    contain: layout paint style;
+}
+
+/* El video en su propia capa para que su composición no encarezca el scroll. */
+.flu3nce-landing .hero-video {
+    will-change: transform;
+    transform: translateZ(0);
+}
+
+/* Movimiento reducido: detenemos el drift de los orbs por accesibilidad, pero
+   mantenemos visible el video del hero (landing.css lo ocultaba con display:none,
+   lo que dejaba el hero vacío en Windows con "efectos de animación" apagados). */
+@media (prefers-reduced-motion: reduce) {
+    .flu3nce-landing .bg-orb {
+        animation: none;
+    }
+    .flu3nce-landing .hero-video {
+        display: block;
+    }
+}

@@ -1,0 +1,3495 @@
+/*
+ * /flu · Sistema de diseño Flu3nce, alternativa C («sobria con corriente»).
+ *
+ * Superficies planas, grises fríos y un solo azul. Lo fluido viene de la línea (el hilo de
+ * actividad), la forma (radios amplios, píldoras) y el movimiento (la corriente del compositor).
+ * Sin desenfoque ni transparencias: todo usa los tokens --fl-* de globals.css, así que el modo
+ * oscuro sale de los mismos selectores. Reglas completas: docs/diseno/README.md.
+ */
+
+/* ── Estructura ─────────────────────────────────────────────────────────── */
+
+.flu-shell {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    min-height: 0;
+    background: var(--fl-bg);
+    color: var(--fl-text);
+    font-family: var(--fl-font);
+}
+
+.flu-nav,
+.flu-main,
+.flu-context {
+    position: relative;
+    z-index: 1;
+    min-height: 0;
+}
+
+.flu-nav {
+    width: var(--flu-nav-width, 272px);
+    flex-basis: var(--flu-nav-width, 272px);
+    overflow: hidden;
+    background: var(--fl-bg-subtle);
+    transition:
+        width 0.3s var(--fl-ease),
+        flex-basis 0.3s var(--fl-ease),
+        padding 0.3s var(--fl-ease),
+        opacity 0.22s ease,
+        transform 0.3s var(--fl-ease),
+        visibility 0s;
+}
+.flu-shell.nav-closed .flu-nav {
+    width: 0;
+    flex-basis: 0;
+    padding-left: 0;
+    padding-right: 0;
+    border-width: 0;
+    opacity: 0;
+    transform: translateX(-18px);
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+        width 0.3s var(--fl-ease),
+        flex-basis 0.3s var(--fl-ease),
+        padding 0.3s var(--fl-ease),
+        opacity 0.2s ease,
+        transform 0.3s var(--fl-ease),
+        visibility 0s 0.3s;
+}
+
+.flu-main {
+    min-width: 0;
+    background: var(--fl-bg);
+}
+
+.flu-context {
+    display: flex;
+    flex: 0 0 var(--flu-context-width, 330px);
+    flex-direction: column;
+    width: var(--flu-context-width, 330px);
+    overflow: hidden;
+    border-left: 1px solid var(--fl-divider);
+    background: var(--fl-bg);
+}
+.flu-shell.context-closed .flu-context {
+    display: none;
+}
+.flu-context-scroll {
+    min-height: 0;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.flu-mobile-backdrop {
+    display: none;
+}
+
+/* ── Barra lateral ──────────────────────────────────────────────────────── */
+
+.flu-brand {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 44px;
+    margin: 0 2px 22px 6px;
+}
+.flu-brand a {
+    display: block;
+    min-width: 0;
+    border-radius: 8px;
+}
+.flu-brand img {
+    display: block;
+    width: 132px;
+    height: auto;
+}
+
+.flu-brand button,
+.flu-context-heading button {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--fl-text-3);
+    font-size: 20px;
+    line-height: 1;
+    transition: background 0.2s var(--fl-ease);
+}
+.flu-brand button:hover,
+.flu-context-heading button:hover {
+    background: var(--fl-hover-strong);
+}
+
+.flu-label,
+.flu-nav-heading,
+.flu-eyebrow {
+    color: var(--fl-text-4);
+    font-family: var(--fl-mono);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.flu-label {
+    margin: 0 0 10px 6px;
+}
+.flu-eyebrow {
+    display: block;
+    color: var(--fl-primary);
+    font-size: 12px;
+}
+
+/* «Nuevo chat»: píldora blanca. La única acción azul sólida de la vista es enviar. */
+.flu-primary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 42px;
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    padding: 0 16px;
+    background: var(--fl-bg);
+    box-shadow: var(--fl-shadow-xs);
+    color: var(--fl-text);
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+    transition:
+        border-color 0.2s var(--fl-ease),
+        background 0.2s var(--fl-ease);
+}
+.flu-primary:hover:not(:disabled) {
+    border-color: var(--fl-border-strong);
+}
+
+.flu-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 42px;
+    margin-top: 10px;
+    border-radius: 999px;
+    padding: 0 14px;
+    background: var(--fl-hover-strong);
+    color: var(--fl-text-3);
+}
+.flu-search:focus-within {
+    box-shadow: 0 0 0 2px var(--fl-primary);
+}
+.flu-search span {
+    font-size: 18px;
+    line-height: 1;
+}
+.flu-search input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--fl-text);
+    font-size: 14px;
+}
+.flu-search input::placeholder {
+    color: var(--fl-text-4);
+}
+
+.flu-nav-list {
+    scrollbar-color: var(--fl-border-strong) transparent;
+    scrollbar-width: thin;
+}
+
+.flu-nav-heading {
+    margin: 12px 12px 6px;
+}
+.flu-nav-heading.with-space {
+    margin-top: 22px;
+}
+
+.flu-chat-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 36px;
+    margin: 1px 0;
+    border: 0;
+    border-radius: 12px;
+    padding: 7px 12px;
+    background: transparent;
+    color: var(--fl-text-2);
+    font-size: 14px;
+    font-weight: 400;
+    text-align: left;
+    transition: background 0.2s var(--fl-ease);
+}
+.flu-chat-link > span:first-child {
+    flex: none;
+    color: var(--fl-text-4);
+    font-size: 16px;
+    line-height: 1;
+}
+.flu-chat-link > svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    color: var(--fl-text-4);
+}
+.flu-chat-link:hover {
+    background: var(--fl-hover-strong);
+}
+.flu-chat-link.is-selected {
+    background: var(--fl-primary-subtle);
+    color: var(--fl-primary-text);
+    font-weight: 600;
+}
+.flu-chat-link.is-selected > svg {
+    color: var(--fl-primary);
+}
+.flu-chat-link .flu-chat-unread-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    margin-left: auto;
+    border-radius: 50%;
+    background: var(--fl-primary);
+    animation: fl-pulse 1.6s var(--fl-ease) infinite;
+}
+
+.flu-nav-empty {
+    padding: 8px 12px;
+    color: var(--fl-text-4);
+    font-size: 13px;
+}
+.flu-more {
+    margin: 4px 12px;
+    padding: 4px 0;
+    color: var(--fl-link);
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+}
+.flu-more:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.flu-project-heading-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-right: 4px;
+}
+.flu-project-heading-row button,
+.flu-project-new {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    margin-right: 4px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--fl-text-3);
+    font-size: 16px;
+    font-weight: 500;
+}
+.flu-project-heading-row button:hover,
+.flu-project-new:hover {
+    background: var(--fl-hover-strong);
+    color: var(--fl-text);
+}
+.flu-project-group {
+    margin: 1px 0;
+    border-radius: 12px;
+}
+.flu-project-row {
+    display: flex;
+    align-items: center;
+    min-height: 38px;
+    border-radius: 12px;
+}
+.flu-project-selected {
+    background: var(--fl-hover-strong);
+}
+.flu-project-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: var(--fl-text-2);
+    font-weight: 500;
+}
+.flu-project-toggle svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    color: var(--fl-text-4);
+}
+.flu-project-toggle svg:first-child {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.2s var(--fl-ease);
+}
+.flu-project-toggle[aria-expanded="true"] svg:first-child {
+    transform: rotate(180deg);
+}
+/* Los chats de un proyecto cuelgan de una línea de corriente. */
+.flu-project-chats {
+    margin: 2px 0 6px 19px;
+    border-left: 1.5px solid var(--fl-border);
+    padding-left: 8px;
+    animation: flu-nav-item-in 0.2s var(--fl-ease) both;
+}
+.flu-project-chats .flu-chat-link {
+    min-height: 34px;
+}
+
+/* Cuenta */
+.flu-account-area {
+    position: relative;
+    flex: none;
+    margin-top: 14px;
+}
+.flu-account-avatar {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--fl-primary-subtle-2);
+    color: var(--fl-primary-text);
+    font: 600 15px var(--fl-font);
+    transition: background 0.2s var(--fl-ease);
+}
+.flu-account-avatar:hover,
+.flu-account-avatar[aria-expanded="true"] {
+    background: var(--fl-primary-line);
+}
+.flu-account-menu {
+    position: absolute;
+    z-index: 24;
+    bottom: calc(100% + 8px);
+    left: 0;
+    width: min(260px, calc(var(--flu-nav-width, 272px) - 32px));
+    overflow: hidden;
+    border: 1px solid var(--fl-border);
+    border-radius: 20px;
+    padding: 6px;
+    background: var(--fl-bg);
+    box-shadow: var(--fl-shadow-menu);
+    animation: flu-nav-item-in 0.2s var(--fl-ease) both;
+}
+.flu-account-identity {
+    display: grid;
+    gap: 2px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--fl-divider);
+    overflow-wrap: anywhere;
+}
+.flu-account-identity strong {
+    color: var(--fl-text);
+    font-size: 14px;
+    font-weight: 600;
+}
+.flu-account-identity span {
+    color: var(--fl-text-4);
+    font-size: 12px;
+}
+.flu-account-menu > button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin-top: 2px;
+    border: 0;
+    border-radius: 12px;
+    padding: 9px 12px;
+    background: transparent;
+    color: var(--fl-text-2);
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+}
+.flu-account-menu > button:hover:not(:disabled) {
+    background: var(--fl-hover);
+}
+.flu-account-menu > button:disabled {
+    opacity: 0.5;
+}
+.flu-account-menu > button svg {
+    width: 16px;
+    height: 16px;
+}
+.flu-account-theme {
+    padding: 10px 12px 8px;
+}
+.flu-account-theme > span {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--fl-text-4);
+    font-family: var(--fl-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.flu-account-theme-options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2px;
+    border-radius: 999px;
+    padding: 3px;
+    background: var(--fl-hover-strong);
+}
+.flu-account-theme-options button {
+    min-width: 0;
+    border: 0;
+    border-radius: 999px;
+    padding: 6px 4px;
+    background: transparent;
+    color: var(--fl-text-3);
+    font-size: 12px;
+    font-weight: 500;
+}
+.flu-account-theme-options button:hover {
+    color: var(--fl-text);
+}
+.flu-account-theme-options button[aria-checked="true"] {
+    background: var(--fl-bg);
+    box-shadow: var(--fl-shadow-xs);
+    color: var(--fl-text);
+    font-weight: 600;
+}
+
+/* Asa para redimensionar los rieles */
+.flu-rail-resize-handle {
+    position: absolute;
+    z-index: 5;
+    top: 0;
+    right: -5px;
+    bottom: 0;
+    width: 10px;
+    cursor: col-resize;
+    touch-action: none;
+}
+.flu-deliverable-panel > .flu-rail-resize-handle,
+.flu-context > .flu-rail-resize-handle {
+    left: -5px;
+    right: auto;
+}
+.flu-rail-resize-handle::after {
+    content: "";
+    position: absolute;
+    top: 20%;
+    bottom: 20%;
+    left: 4px;
+    width: 2px;
+    border-radius: 2px;
+    background: transparent;
+    transition: background 0.15s ease;
+}
+.flu-rail-resize-handle:hover::after,
+.flu-rail-resize-handle:focus-visible::after {
+    background: var(--fl-primary-line);
+}
+.flu-rail-resize-handle:focus-visible {
+    outline: 2px solid var(--fl-primary);
+    outline-offset: -2px;
+}
+.flu-shell.is-resizing,
+.flu-shell.is-resizing * {
+    user-select: none;
+}
+.flu-shell.is-resizing .flu-nav {
+    transition: none;
+}
+
+/* ── Barra superior ─────────────────────────────────────────────────────── */
+
+.flu-topbar {
+    min-height: 60px;
+    border-bottom: 1px solid var(--fl-divider);
+    background: var(--fl-bg);
+}
+.flu-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: var(--fl-text-4);
+    font-size: 14px;
+}
+.flu-breadcrumb strong {
+    overflow: hidden;
+    max-width: 360px;
+    color: var(--fl-text);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.flu-icon-button,
+.flu-context-toggle {
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    background: var(--fl-bg);
+    color: var(--fl-text-2);
+    transition:
+        background 0.2s var(--fl-ease),
+        border-color 0.2s var(--fl-ease);
+}
+.flu-icon-button {
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
+}
+.flu-icon-button:hover,
+.flu-context-toggle:hover {
+    background: var(--fl-hover);
+}
+.flu-context-toggle {
+    min-height: 36px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+}
+.flu-context-toggle[aria-expanded="true"] {
+    border-color: var(--fl-primary-line);
+    background: var(--fl-primary-subtle);
+    color: var(--fl-primary-text);
+}
+.flu-context-topbar-button {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+}
+.flu-context-topbar-button svg {
+    width: 16px;
+    height: 16px;
+}
+
+.flu-chat-rename-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: min(360px, 40vw);
+    border: 0;
+    border-radius: 10px;
+    padding: 4px 8px;
+    background: transparent;
+    overflow: hidden;
+    color: var(--fl-text);
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.flu-chat-rename-trigger:hover {
+    background: var(--fl-hover);
+}
+.flu-chat-rename-trigger svg {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    color: var(--fl-text-4);
+}
+.flu-chat-rename-form {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+.flu-chat-rename-form input {
+    width: clamp(130px, 22vw, 300px);
+    min-width: 0;
+    border: 1px solid var(--fl-border-strong);
+    border-radius: 10px;
+    padding: 6px 10px;
+    background: var(--fl-bg);
+    color: var(--fl-text);
+    font-size: 14px;
+}
+.flu-chat-rename-form button {
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    padding: 6px 12px;
+    background: var(--fl-bg);
+    color: var(--fl-text-2);
+    font-size: 13px;
+    font-weight: 600;
+}
+.flu-chat-rename-form button[type="submit"] {
+    border-color: var(--fl-primary);
+    background: var(--fl-primary);
+    color: #fff;
+}
+.flu-chat-rename-form button:disabled {
+    opacity: 0.5;
+}
+
+.flu-chat-id-strip {
+    padding: 0 20px 8px;
+    border-bottom: 1px solid var(--fl-divider);
+    background: var(--fl-surface-2);
+}
+.flu-chat-reference {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
+    max-width: 100%;
+    margin-top: 10px;
+    border-top: 1px solid var(--fl-divider);
+    padding-top: 6px;
+    color: var(--fl-text-4);
+    font-size: 11px;
+    line-height: 1.5;
+}
+.flu-chat-id-strip .flu-chat-reference {
+    margin: 0;
+    border: 0;
+    padding: 0;
+}
+.flu-chat-reference code {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    font: 500 11px/1.5 var(--fl-mono);
+}
+.flu-chat-reference code[aria-label="ID de la solicitud"] {
+    overflow: hidden;
+    max-width: 165px;
+    text-overflow: ellipsis;
+}
+.flu-chat-reference button {
+    min-height: 24px;
+    margin-left: auto;
+    border-radius: 999px;
+    padding: 1px 8px;
+    color: var(--fl-link);
+    font-size: 11px;
+    font-weight: 600;
+}
+.flu-chat-reference button:hover,
+.flu-chat-reference button:focus-visible {
+    background: var(--fl-primary-subtle);
+}
+
+/* ── Bienvenida: ola plana arriba y el compositor al centro ─────────────── */
+
+.flu-welcome-wrap {
+    position: relative;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 148px !important;
+    padding-bottom: 40px !important;
+    scrollbar-width: thin;
+}
+.flu-welcome-wrap::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 160px;
+    background: var(--fl-wave) top / 100% 100% no-repeat;
+    pointer-events: none;
+}
+.flu-welcome-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    width: min(100%, 760px);
+    margin: 0 auto;
+    text-align: left;
+    animation: flu-appear 0.3s var(--fl-ease) both;
+}
+/* El ícono de destello no forma parte del sistema: el saludo y el compositor bastan. */
+.flu-welcome-icon {
+    display: none;
+}
+.flu-welcome-card .flu-eyebrow {
+    order: 1;
+}
+.flu-welcome-card h1 {
+    order: 2;
+    margin: 0 0 14px;
+    color: var(--fl-text);
+    font: 600 clamp(30px, 4vw, 48px) / 1.16 var(--fl-font);
+    letter-spacing: -0.03em;
+}
+.flu-welcome-card .flu-chat-composer {
+    order: 3;
+    width: 100%;
+    margin: 0;
+}
+.flu-welcome-card .flu-chat-composer-input {
+    min-height: 76px;
+}
+.flu-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    order: 4;
+    width: 100%;
+}
+.flu-suggestions button {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    padding: 0 14px;
+    background: var(--fl-bg);
+    color: var(--fl-text-2);
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+    transition:
+        border-color 0.2s var(--fl-ease),
+        background 0.2s var(--fl-ease);
+}
+.flu-suggestions button:hover:not(:disabled) {
+    border-color: var(--fl-border-strong);
+    background: var(--fl-hover);
+}
+.flu-suggestions button:disabled {
+    opacity: 0.55;
+}
+.flu-suggestions span {
+    display: none;
+}
+
+/* ── Conversación ───────────────────────────────────────────────────────── */
+
+.flu-log {
+    background: var(--fl-bg);
+    scroll-behavior: smooth;
+    scrollbar-color: var(--fl-border-strong) transparent;
+    scrollbar-width: thin;
+}
+
+.flu-message {
+    overflow-wrap: anywhere;
+    border: 0;
+    box-shadow: none;
+    color: var(--fl-text);
+    font-size: 16px;
+    line-height: 26px;
+    animation: flu-appear 0.24s var(--fl-ease) both;
+}
+.flu-message pre {
+    max-width: 100%;
+    overflow-x: auto;
+}
+/* Burbuja del usuario: gris frío, esquina inferior derecha marcada. */
+.flu-message.flu-user {
+    width: fit-content;
+    max-width: min(90%, 560px);
+    border-radius: 22px 22px 6px 22px;
+    padding: 12px 18px;
+    background: var(--fl-bg-subtle);
+}
+/* Respuesta de Flu3nce: sin burbuja; corre sobre el hilo de corriente. */
+.flu-message.flu-assistant {
+    width: auto;
+    max-width: 100%;
+    margin-left: 12px;
+    border-left: 2px solid var(--fl-primary-line);
+    border-radius: 0;
+    padding: 2px 0 2px 20px;
+    background: transparent;
+}
+
+.flu-markdown {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.flu-markdown > :first-child {
+    margin-top: 0;
+}
+.flu-markdown > :last-child {
+    margin-bottom: 0;
+}
+.flu-markdown p {
+    margin: 0.55em 0;
+    white-space: pre-wrap;
+}
+.flu-markdown h1,
+.flu-markdown h2,
+.flu-markdown h3 {
+    margin: 1em 0 0.4em;
+    color: var(--fl-text);
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+}
+.flu-markdown h1 {
+    font-size: 1.35em;
+}
+.flu-markdown h2 {
+    font-size: 1.2em;
+}
+.flu-markdown h3 {
+    font-size: 1.08em;
+}
+.flu-markdown ul,
+.flu-markdown ol {
+    margin: 0.55em 0;
+    padding-left: 1.45em;
+}
+.flu-markdown ul {
+    list-style: disc;
+}
+.flu-markdown ol {
+    list-style: decimal;
+}
+.flu-markdown li {
+    padding-left: 0.15em;
+}
+.flu-markdown li + li {
+    margin-top: 0.2em;
+}
+.flu-markdown blockquote {
+    margin: 0.7em 0;
+    border-left: 2px solid var(--fl-primary-line);
+    padding: 0.15em 0.9em;
+    color: var(--fl-text-3);
+}
+.flu-markdown a {
+    color: var(--fl-link);
+    text-decoration: underline;
+    text-decoration-color: var(--fl-primary-line);
+    text-underline-offset: 3px;
+}
+.flu-markdown a:hover {
+    color: var(--fl-primary-hover);
+}
+.flu-markdown code {
+    border-radius: 6px;
+    padding: 0.08em 0.35em;
+    background: var(--fl-hover-strong);
+    font-family: var(--fl-mono);
+    font-size: 0.9em;
+}
+.flu-markdown pre {
+    margin: 0.7em 0;
+    overflow-x: auto;
+    border: 1px solid var(--fl-divider);
+    border-radius: 14px;
+    padding: 0.8em 1em;
+    background: var(--fl-surface-2);
+}
+.flu-markdown pre code {
+    padding: 0;
+    background: none;
+}
+.flu-markdown table {
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    margin: 0.7em 0;
+    overflow-x: auto;
+    border-collapse: collapse;
+}
+.flu-markdown th,
+.flu-markdown td {
+    border: 1px solid var(--fl-border);
+    padding: 0.4em 0.7em;
+    text-align: left;
+}
+.flu-markdown th {
+    background: var(--fl-surface-2);
+    font-weight: 600;
+}
+.flu-markdown input[type="checkbox"] {
+    margin-right: 0.4em;
+}
+
+.flu-message-parts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: 10px;
+}
+.flu-message-parts > :not(.flu-message-part-deliverable) {
+    grid-column: 1 / -1;
+}
+.flu-message-part-table {
+    min-width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.flu-message-part-table th,
+.flu-message-part-table td {
+    border: 1px solid var(--fl-border);
+    padding: 7px 10px;
+    text-align: left;
+}
+.flu-message-part-table th {
+    background: var(--fl-surface-2);
+    color: var(--fl-text-2);
+    font-weight: 600;
+}
+
+/* Tarjeta de entregable dentro del hilo */
+.flu-message-part-deliverable {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    min-height: 72px;
+    border: 1px solid var(--fl-border);
+    border-radius: 20px;
+    padding: 14px 16px;
+    background: var(--fl-bg);
+    color: var(--fl-text);
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+    transition:
+        border-color 0.2s var(--fl-ease),
+        transform 0.2s var(--fl-ease);
+}
+.flu-message-part-deliverable:hover:not(:disabled),
+.flu-message-part-deliverable:focus-visible {
+    border-color: var(--fl-border-strong);
+    transform: translateY(-1px);
+}
+.flu-message-part-deliverable:disabled {
+    cursor: progress;
+}
+.flu-message-part-deliverable-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    background: var(--fl-primary-subtle);
+    color: var(--fl-primary);
+    font-size: 18px;
+}
+.flu-message-part-deliverable-copy {
+    display: grid;
+    flex: 1;
+    gap: 3px;
+    min-width: 0;
+}
+.flu-message-part-deliverable-copy strong {
+    overflow-wrap: anywhere;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+.flu-message-part-deliverable-copy small {
+    color: var(--fl-text-4);
+    font-family: var(--fl-mono);
+    font-size: 12px;
+    font-weight: 400;
+}
+.flu-message-part-deliverable-arrow {
+    align-self: center;
+    color: var(--fl-text-4);
+    font-size: 17px;
+}
+
+.flu-message-model {
+    display: block;
+    margin-top: 8px;
+    color: var(--fl-text-4);
+    font-family: var(--fl-mono);
+    font-size: 11px;
+}
+
+/* Fuentes citadas */
+.flu-message-sources {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+.flu-message-source-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 10px;
+    max-width: 100%;
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    padding: 5px 14px 5px 5px;
+    background: var(--fl-bg);
+    color: var(--fl-text);
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition:
+        background 0.2s var(--fl-ease),
+        border-color 0.2s var(--fl-ease);
+}
+.flu-message-source-card > span:nth-child(2) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.flu-message-source-card small {
+    grid-column: 2;
+    color: var(--fl-text-4);
+    font-size: 12px;
+    font-weight: 400;
+}
+.flu-message-source-card:hover,
+.flu-context-source:hover {
+    background: var(--fl-hover);
+}
+.flu-message-source-card:focus-visible,
+.flu-context-source:focus-visible {
+    outline: 2px solid var(--fl-primary);
+    outline-offset: 2px;
+}
+.flu-source-type {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    background: var(--fl-hover-strong);
+    color: var(--fl-text-2);
+    font-family: var(--fl-mono);
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+.flu-source-extraction-note {
+    margin-top: 8px;
+    color: var(--fl-warning-text);
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+/* Sugerencias de respuesta: píldoras, como en el inicio. */
+.flu-chat-suggestions button {
+    border-color: var(--fl-border);
+    border-radius: 999px;
+    padding: 6px 14px;
+    background: var(--fl-bg);
+    color: var(--fl-text-2);
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    transition:
+        border-color 0.2s var(--fl-ease),
+        background 0.2s var(--fl-ease);
+}
+.flu-chat-suggestions button:hover:not(:disabled) {
+    border-color: var(--fl-border-strong);
+    background: var(--fl-hover);
+}
+.flu-chat-status,
+.flu-chat-answers {
+    border-radius: 14px;
+    font-size: 13px;
+}
+/* Acción propuesta: tarjeta con borde; confirmar es la acción azul del bloque. */
+.flu-chat-proposal {
+    border-radius: 20px;
+    padding: 14px 16px;
+    background: var(--fl-bg);
+    color: var(--fl-text-2);
+    font-size: 13px;
+}
+.flu-chat-proposal > p:first-child {
+    color: var(--fl-text);
+    font-size: 14px;
+    font-weight: 600;
+}
+.flu-chat-proposal li,
+.flu-chat-proposal .rounded-lg {
+    border-radius: 12px;
+    background: var(--fl-surface-2);
+}
+.flu-chat-proposal button {
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 13px;
+}
+.flu-chat-proposal button:first-child:not(:last-child) {
+    background: var(--fl-primary);
+    color: #fff;
+}
+.flu-chat-proposal button:first-child:not(:last-child):hover:not(:disabled) {
+    background: var(--fl-primary-hover);
+}
+
+.flu-chat-failure {
+    margin-top: 8px;
+    border: 1px solid var(--fl-error-border);
+    border-radius: 14px;
+    padding: 8px 12px;
+    background: var(--fl-error-bg);
+    color: var(--fl-error-text);
+    font-size: 13px;
+}
+
+/* Bloque «pensando»: una píldora con tres puntos que suben. */
+.flu-thinking {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: fit-content;
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    padding: 8px 14px;
+    background: var(--fl-bg);
+    color: var(--fl-text-3);
+    font-size: 13px;
+}
+.flu-thinking-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.flu-thinking-dots i {
+    display: block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--fl-primary);
+    animation: flu-pulse 1.1s infinite ease-in-out;
+}
+.flu-thinking-dots i:nth-child(2) {
+    animation-delay: 0.15s;
+}
+.flu-thinking-dots i:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+/* Trabajo en segundo plano */
+.flu-job-activity {
+    min-width: 0;
+}
+.flu-activity-deliverable {
+    margin-top: 12px;
+}
+.flu-activity-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--fl-primary-line);
+    border-top-color: var(--fl-primary);
+    border-radius: 50%;
+    animation: flu-spin 0.8s linear infinite;
+}
+.flu-activity-retry {
+    margin: 12px 0 0;
+    border: 1px solid var(--fl-error-border);
+    border-radius: 999px;
+    padding: 7px 14px;
+    background: var(--fl-bg);
+    color: var(--fl-error-text);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* Hilo de actividad: lo terminado es línea continua; lo que está en curso fluye. */
+.flu-chat-activity {
+    width: 100%;
+    min-width: 0;
+    margin: 6px 0;
+    color: var(--fl-text-3);
+    font-size: 13px;
+}
+.flu-chat-activity summary {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: fit-content;
+    max-width: 100%;
+    min-height: 38px;
+    border: 1px solid var(--fl-divider);
+    border-radius: 19px;
+    padding: 5px 12px 5px 8px;
+    background: var(--fl-surface-2);
+    cursor: pointer;
+    list-style: none;
+    transition: background 0.2s var(--fl-ease);
+}
+.flu-chat-activity summary::-webkit-details-marker {
+    display: none;
+}
+.flu-chat-activity summary:hover {
+    background: var(--fl-hover);
+    color: var(--fl-text-2);
+}
+.flu-chat-activity.is-active summary {
+    border-color: var(--fl-primary-line);
+    background: var(--fl-bg);
+}
+.flu-chat-activity-label {
+    flex: 1;
+    min-width: 0;
+    font-weight: 500;
+}
+.flu-chat-activity.is-active .flu-chat-activity-label {
+    color: var(--fl-text);
+}
+.flu-chat-activity-label small {
+    display: block;
+    margin-top: 1px;
+    color: var(--fl-text-4);
+    font-size: 12px;
+    font-weight: 400;
+}
+.flu-chat-activity-symbol {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    background: var(--fl-success-bg);
+    color: var(--fl-success);
+    font-size: 12px;
+    font-weight: 700;
+}
+.flu-chat-activity.is-active .flu-chat-activity-symbol {
+    background: var(--fl-primary-subtle);
+    animation: fl-pulse 1.6s var(--fl-ease) infinite;
+}
+.flu-chat-activity-symbol i {
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid var(--fl-primary-line);
+    border-top-color: var(--fl-primary);
+    border-radius: 50%;
+    animation: flu-spin 1s linear infinite;
+}
+.flu-chat-activity-chevron {
+    flex: none;
+    padding: 3px 4px;
+    color: var(--fl-text-4);
+    transition: transform 0.2s var(--fl-ease);
+}
+.flu-chat-activity[open] .flu-chat-activity-chevron {
+    transform: rotate(180deg);
+}
+.flu-chat-activity ol {
+    position: relative;
+    display: grid;
+    gap: 8px;
+    margin: 8px 0 6px 18px;
+    padding: 2px 0 3px 20px;
+}
+.flu-chat-activity ol::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--fl-primary-line);
+}
+.flu-chat-activity.is-active ol::before {
+    background: repeating-linear-gradient(180deg, var(--fl-primary) 0 4px, transparent 4px 10px) 0 0 / 2px 20px;
+    animation: fl-flow-down 1s linear infinite;
+}
+.flu-chat-activity li {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 13px;
+}
+.flu-chat-activity li > span:first-child {
+    color: var(--fl-text-4);
+}
+.flu-chat-activity li > span:nth-child(2) {
+    flex: 1;
+    min-width: 0;
+}
+.flu-chat-activity li small {
+    flex: none;
+    color: var(--fl-text-4);
+    font-family: var(--fl-mono);
+    font-size: 11px;
+}
+
+/* La actividad suelta, el trabajo en segundo plano y la respuesta en vivo corren sobre el
+   mismo hilo que las respuestas: línea continua al terminar, discontinua mientras trabaja. */
+.flu-job-activity,
+.flu-log > div > .flu-chat-stream,
+.flu-log > div > .flu-chat-activity {
+    margin-left: 12px;
+    border-left: 2px solid var(--fl-primary-line);
+    padding-left: 20px;
+}
+.flu-log > div > .flu-chat-activity {
+    width: auto;
+}
+.flu-job-activity:has(.flu-chat-activity.is-active),
+.flu-log > div > .flu-chat-stream:has(.flu-chat-activity.is-active),
+.flu-log > div > .flu-chat-activity.is-active {
+    border-left-style: dashed;
+    border-left-color: var(--fl-primary);
+}
+.flu-chat-stream .flu-message.flu-assistant,
+.flu-job-activity .flu-message.flu-assistant {
+    margin-left: 0;
+    border-left: 0;
+    padding-left: 0;
+}
+.flu-log > div > .flu-thinking {
+    margin-left: 34px;
+}
+
+/* Respuesta en vivo */
+.flu-chat-stream {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: 14px;
+    min-width: 0;
+}
+.flu-chat-stream > :not(.flu-chat-stream-card) {
+    grid-column: 1 / -1;
+}
+.flu-chat-stream .flu-message {
+    font-size: 16px;
+    line-height: 26px;
+}
+.flu-chat-stream-card {
+    display: grid;
+    gap: 9px;
+    min-width: 0;
+    font-size: 16px;
+    line-height: 26px;
+}
+.flu-chat-stream-card:has(.flu-markdown) {
+    grid-column: 1 / -1;
+}
+.flu-chat-live-status {
+    padding: 6px 2px;
+    color: var(--fl-text-4);
+    font-size: 13px;
+}
+
+/* Preguntas de Flu3nce */
+.flu-question-prompt {
+    overflow-wrap: anywhere;
+}
+.flu-question-prompt .flu-markdown p {
+    margin: 0;
+}
+.flu-question-readable {
+    display: grid;
+    gap: 9px;
+    min-width: 0;
+    font-weight: 400;
+}
+.flu-question-readable details {
+    min-width: 0;
+    border: 1px solid var(--fl-divider);
+    border-radius: 14px;
+    padding: 8px 12px;
+    background: var(--fl-surface-2);
+    color: var(--fl-text-3);
+}
+.flu-question-readable summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+.flu-question-readable ul,
+.flu-question-readable ol {
+    padding-left: 20px;
+}
+.flu-question-readable li {
+    margin-top: 5px;
+    overflow-wrap: anywhere;
+}
+.flu-question-readable > p:last-child {
+    font-weight: 600;
+}
+.flu-question-many-options {
+    width: 100%;
+    min-width: 0;
+}
+.flu-question-many-options select {
+    max-width: 100%;
+}
+.flu-question-many-options p {
+    margin-top: 7px;
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.flu-job-inputs {
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+.flu-job-inputs summary {
+    padding: 6px 0;
+    color: var(--fl-link);
+    font-weight: 600;
+    cursor: pointer;
+}
+.flu-job-inputs p {
+    margin: 9px 0 4px;
+    font-weight: 600;
+}
+.flu-job-inputs ul {
+    padding-left: 18px;
+    list-style: disc;
+}
+
+.flu-chat-permissions {
+    margin-top: 10px;
+    border: 1px solid var(--fl-warning-bg);
+    border-radius: 16px;
+    padding: 12px 14px;
+    background: var(--fl-warning-bg);
+    color: var(--fl-warning-text);
+    font-size: 13px;
+    line-height: 1.6;
+}
+.flu-chat-permissions ul {
+    display: grid;
+    gap: 8px;
+    margin-top: 8px;
+}
+.flu-chat-permissions li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.flu-chat-permissions li span {
+    flex: 1;
+    min-width: 140px;
+    overflow-wrap: anywhere;
+}
+.flu-chat-permissions button {
+    flex: none;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    padding: 6px 12px;
+    background: var(--fl-bg);
+    font-weight: 600;
+}
+.flu-chat-permissions button:disabled {
+    opacity: 0.5;
+}
+
+/* Ir al final */
+.flu-main {
+    position: relative;
+}
+.flu-chat-scroll-bottom {
+    position: absolute;
+    z-index: 8;
+    right: 30px;
+    bottom: 182px;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--fl-border);
+    border-radius: 50%;
+    background: var(--fl-bg);
+    box-shadow: var(--fl-shadow-menu);
+    color: var(--fl-text-2);
+    font-size: 20px;
+    line-height: 1;
+}
+.flu-chat-scroll-bottom:hover {
+    background: var(--fl-hover);
+}
+.flu-chat-scroll-bottom:focus-visible {
+    outline: 2px solid var(--fl-primary);
+    outline-offset: 3px;
+}
+.flu-chat-scroll-bottom.has-new-reply {
+    border-color: var(--fl-primary);
+    color: var(--fl-primary);
+}
+.flu-chat-scroll-unread {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 11px;
+    height: 11px;
+    border: 2px solid var(--fl-bg);
+    border-radius: 50%;
+    background: var(--fl-primary);
+    pointer-events: none;
+}
+
+/* Esqueletos de carga */
+.flu-chat-skeleton {
+    background: linear-gradient(100deg, var(--fl-hover-strong) 20%, var(--fl-surface-2) 40%, var(--fl-hover-strong) 60%);
+    background-size: 220% 100%;
+    animation: flu-chat-skeleton-sweep 1.5s ease-in-out infinite;
+}
+.flu-chat-nav-skeleton {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+}
+.flu-chat-nav-skeleton .flu-chat-skeleton {
+    width: 85%;
+    height: 12px;
+    border-radius: 6px;
+}
+.flu-chat-nav-skeleton .flu-chat-skeleton:nth-child(2) {
+    width: 67%;
+}
+
+/* ── Compositor ─────────────────────────────────────────────────────────── */
+
+.flu-composer-area {
+    border-top: 0;
+    background: var(--fl-bg);
+}
+
+.flu-chat-composer {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    width: min(100%, 760px);
+    margin: 0 auto;
+    border: 1px solid var(--fl-border);
+    border-radius: 28px;
+    padding: 16px 12px 12px 22px;
+    background: var(--fl-bg);
+    box-shadow: var(--fl-shadow-float);
+    text-align: left;
+    transition:
+        border-color 0.2s var(--fl-ease),
+        box-shadow 0.2s var(--fl-ease);
+}
+.flu-chat-composer:focus-within {
+    border-color: var(--fl-primary);
+    box-shadow:
+        0 0 0 4px var(--fl-primary-subtle),
+        var(--fl-shadow-float);
+}
+/* Mientras Flu3nce trabaja, una corriente recorre el borde superior (solo transform). */
+.flu-chat-composer.is-working::after {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: 0;
+    width: 30%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--fl-primary), transparent);
+    pointer-events: none;
+    animation: fl-current 1.8s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+.flu-chat-composer-input {
+    display: block;
+    width: 100%;
+    min-height: 52px;
+    max-height: 176px;
+    overflow-y: auto;
+    resize: none;
+    border: 0;
+    outline: none;
+    padding: 2px 4px 10px 0;
+    background: transparent;
+    color: var(--fl-text);
+    font-size: 16px;
+    line-height: 24px;
+}
+.flu-chat-composer-input::placeholder {
+    color: var(--fl-text-4);
+}
+.flu-chat-composer-input:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.flu-chat-composer-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+}
+.flu-chat-composer-attach {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 40px;
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    padding: 0 14px;
+    background: var(--fl-bg);
+    color: var(--fl-text-2);
+    font-size: 13px;
+    font-weight: 500;
+    transition:
+        background 0.2s var(--fl-ease),
+        border-color 0.2s var(--fl-ease);
+}
+.flu-chat-composer-attach svg {
+    width: 17px;
+    height: 17px;
+}
+.flu-chat-composer-attach:hover:not(:disabled) {
+    border-color: var(--fl-border-strong);
+    background: var(--fl-hover);
+}
+.flu-chat-composer-attach:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+.flu-chat-composer-model {
+    flex: 0 1 180px;
+    min-width: 70px;
+    max-width: 180px;
+    height: 40px;
+    overflow: hidden;
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    padding: 0 12px;
+    background: var(--fl-bg);
+    color: var(--fl-text-2);
+    font-size: 13px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+}
+.flu-chat-composer-model-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    color: var(--fl-text-4);
+    font-size: 12px;
+    white-space: nowrap;
+}
+.flu-chat-composer-model-status button {
+    border-radius: 999px;
+    padding: 3px 6px;
+    color: var(--fl-link);
+    font-size: 16px;
+    line-height: 1;
+}
+.flu-chat-composer-model-status button:hover {
+    background: var(--fl-primary-subtle);
+}
+.flu-chat-composer-hint {
+    flex: 1;
+    overflow: hidden;
+    color: var(--fl-text-4);
+    font-size: 12px;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.flu-chat-composer-dictate {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--fl-text-3);
+    transition: background 0.2s var(--fl-ease);
+}
+.flu-chat-composer-dictate svg {
+    width: 18px;
+    height: 18px;
+}
+.flu-chat-composer-dictate:hover:not(:disabled) {
+    background: var(--fl-hover);
+}
+.flu-chat-composer-dictate.is-listening {
+    background: var(--fl-error-bg);
+    color: var(--fl-error);
+    animation: flu-dictation-pulse 1.6s ease-in-out infinite;
+}
+.flu-chat-composer-dictate:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+.flu-chat-composer-send {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--fl-primary);
+    color: #fff;
+    transition: background 0.2s var(--fl-ease);
+}
+.flu-chat-composer-send svg {
+    width: 19px;
+    height: 19px;
+}
+.flu-chat-composer-send:hover:not(:disabled) {
+    background: var(--fl-primary-hover);
+}
+.flu-chat-composer-send:disabled {
+    cursor: not-allowed;
+    background: var(--fl-hover-strong);
+    color: var(--fl-icon-muted);
+}
+/* Detener: píldora neutra, no compite con enviar. */
+.flu-chat-composer-send.is-task-control {
+    border: 1px solid var(--fl-border);
+    background: var(--fl-bg);
+    color: var(--fl-text);
+}
+.flu-chat-composer-send.is-task-control svg {
+    width: 14px;
+    height: 14px;
+}
+.flu-chat-composer-send.is-task-control:hover:not(:disabled) {
+    background: var(--fl-hover);
+}
+.flu-chat-composer-notice {
+    margin: 8px 2px 0;
+    color: var(--fl-text-3);
+    font-size: 13px;
+}
+
+/* Adjuntos en la bandeja: en el orden en que se agregaron. */
+.flu-chat-attachment-tray {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.flu-chat-attachment {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+    max-width: 100%;
+    border: 1px solid var(--fl-border);
+    border-radius: 18px;
+    padding: 5px 6px 5px 12px;
+    background: var(--fl-bg);
+    color: var(--fl-text);
+    font-size: 13px;
+}
+.flu-chat-attachment-progress {
+    flex: 0 0 100%;
+    height: 3px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--fl-primary-subtle);
+}
+.flu-chat-attachment-progress span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--fl-primary);
+    transition: width 0.22s ease;
+}
+.flu-chat-attachment-name {
+    display: inline-flex;
+    overflow: hidden;
+    min-width: 0;
+    max-width: 205px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.flu-chat-attachment-name-start {
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+}
+.flu-chat-attachment-name-end {
+    flex: none;
+}
+.flu-chat-attachment small {
+    flex: none;
+    color: var(--fl-text-4);
+    font-family: var(--fl-mono);
+    font-size: 11px;
+}
+.flu-chat-attachment-state {
+    border-radius: 999px;
+    padding: 2px 7px;
+    background: var(--fl-primary-subtle-2);
+    color: var(--fl-primary-text);
+    font-family: var(--fl-mono);
+    font-size: 10px;
+    font-weight: 500;
+}
+.flu-chat-attachment button {
+    flex: none;
+    border-radius: 999px;
+    padding: 0 6px;
+    color: var(--fl-text-4);
+    font-size: 17px;
+    line-height: 1;
+}
+.flu-chat-attachment button:hover:not(:disabled) {
+    background: var(--fl-hover);
+    color: var(--fl-text);
+}
+.flu-chat-drop-overlay {
+    position: absolute;
+    z-index: 30;
+    inset: 8px;
+    display: grid;
+    place-items: center;
+    border: 2px dashed var(--fl-primary);
+    border-radius: 28px;
+    background: color-mix(in srgb, var(--fl-primary-subtle) 94%, transparent);
+    color: var(--fl-primary-text);
+    font-size: 15px;
+    font-weight: 600;
+    pointer-events: none;
+}
+
+/* Lotes de subida */
+.flu-upload-batch {
+    min-width: 0;
+    padding-block: 8px;
+}
+.flu-upload-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 9px;
+    color: var(--fl-text-2);
+    font-size: 13px;
+    font-weight: 600;
+}
+.flu-upload-batch button,
+.flu-upload-reselect {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    padding: 4px 12px;
+    background: var(--fl-bg);
+    color: var(--fl-text-2);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.flu-upload-batch button:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+.flu-upload-files {
+    display: grid;
+    gap: 8px;
+}
+.flu-upload-file {
+    overflow: hidden;
+    min-width: 0;
+    border: 1px solid var(--fl-border);
+    border-radius: 16px;
+    padding: 10px 14px;
+    background: var(--fl-bg);
+}
+.flu-upload-file.is-ready {
+    border-color: color-mix(in srgb, var(--fl-success) 35%, var(--fl-border));
+}
+.flu-upload-file.is-failed {
+    border-color: var(--fl-error-border);
+}
+.flu-upload-file-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--fl-text);
+    font-size: 13px;
+}
+.flu-upload-file-name strong {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-width: 0;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.flu-upload-file-name strong > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.flu-upload-file-name strong > span:last-child {
+    flex: none;
+}
+.flu-upload-file-name small {
+    flex: none;
+    color: var(--fl-text-4);
+    font-family: var(--fl-mono);
+    font-size: 11px;
+}
+.flu-upload-file-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 7px;
+    margin-top: 6px;
+    color: var(--fl-text-3);
+    font-size: 12px;
+}
+.flu-upload-file-status > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+.flu-upload-progress {
+    height: 3px;
+    margin-top: 8px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--fl-primary-subtle);
+}
+.flu-upload-progress > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--fl-primary);
+    transition: width 0.7s cubic-bezier(0.12, 0.85, 0.2, 1);
+}
+.flu-upload-progress.is-indeterminate > span {
+    width: 30%;
+    animation: flu-upload-working 2s ease-in-out infinite;
+}
+.flu-upload-reselect {
+    position: relative;
+}
+.flu-upload-reselect input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+.flu-upload-reselect:focus-within {
+    outline: 2px solid var(--fl-primary);
+    outline-offset: 2px;
+}
+.flu-upload-error {
+    margin-top: 8px;
+    color: var(--fl-error-text);
+    font-size: 12px;
+    line-height: 1.5;
+}
+.flu-upload-help {
+    margin-top: 9px;
+    color: var(--fl-text-4);
+    font-size: 12px;
+    line-height: 1.5;
+}
+.flu-composer-area > .flu-upload-batch {
+    max-width: 760px;
+    max-height: min(30dvh, 280px);
+    margin: 0 auto 8px;
+    overflow-y: auto;
+    padding: 0 2px 2px;
+}
+.flu-composer-area .flu-upload-heading {
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+.flu-composer-area .flu-upload-files {
+    gap: 5px;
+}
+.flu-composer-area .flu-upload-file {
+    padding: 7px 12px;
+}
+.flu-composer-area .flu-upload-file-status {
+    margin-top: 2px;
+}
+.flu-composer-area .flu-upload-file-status button {
+    min-width: 28px;
+    min-height: 28px;
+    border: 0;
+    padding: 0 6px;
+    background: transparent;
+    font-size: 17px;
+}
+
+/* ── Panel de contexto ──────────────────────────────────────────────────── */
+
+.flu-context-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+.flu-context-heading .flu-label {
+    margin-left: 0;
+}
+.flu-context-heading h2 {
+    margin-top: 2px;
+    color: var(--fl-text);
+    font: 600 18px/1.3 var(--fl-font);
+    letter-spacing: -0.01em;
+}
+.flu-context section > p,
+.flu-context section > div:not(:first-child) {
+    overflow-wrap: anywhere;
+}
+.flu-context-section {
+    margin-top: 28px;
+}
+.flu-context-section > div:first-child h3 {
+    color: var(--fl-text-4);
+    font-family: var(--fl-mono);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.flu-context-section > div:first-child span {
+    color: var(--fl-text-4);
+    font-family: var(--fl-mono);
+    font-size: 11px;
+}
+.flu-context-empty {
+    margin-top: 10px;
+    border: 1px dashed var(--fl-border-strong);
+    border-radius: 16px;
+    padding: 14px;
+    color: var(--fl-text-3);
+    font-size: 13px;
+    line-height: 1.55;
+    text-align: center;
+}
+.flu-context-item {
+    margin-top: 4px;
+    border: 0;
+    border-radius: 999px;
+    padding: 6px 12px 6px 6px;
+    background: transparent;
+    color: var(--fl-text);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.45;
+    transition: background 0.2s var(--fl-ease);
+}
+.flu-context-item:hover:not(:disabled) {
+    background: var(--fl-hover);
+}
+.flu-context-source {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+}
+.flu-context-source .flu-source-type {
+    flex: none;
+}
+/* Lo que generó Flu3nce se distingue a la vista de lo que subió el usuario. */
+.flu-context-deliverable {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    background: var(--fl-bg-subtle);
+    text-align: left;
+}
+.flu-context-deliverable > span:last-child {
+    color: var(--fl-text-4);
+    font-size: 15px;
+}
+.flu-context-deliverable .flu-context-deliverable-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    background: var(--fl-primary);
+    color: #fff;
+}
+.flu-context-deliverable-icon svg {
+    width: 16px;
+    height: 16px;
+}
+.flu-context-deliverable .flu-context-deliverable-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+}
+.flu-context-action {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    padding: 9px 14px;
+    background: var(--fl-bg);
+    color: var(--fl-text-2);
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    transition:
+        background 0.2s var(--fl-ease),
+        border-color 0.2s var(--fl-ease);
+}
+.flu-context-action:hover:not(:disabled) {
+    border-color: var(--fl-border-strong);
+    background: var(--fl-hover);
+}
+.flu-context-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+.flu-context section p.rounded-lg,
+.flu-context section div.rounded-xl {
+    border-color: var(--fl-divider);
+    background: var(--fl-surface-2);
+}
+
+/* Memoria, biblioteca y permisos */
+.flu-memory-panel .flu-deliverable-panel-content {
+    padding-top: 18px;
+}
+.flu-memory-help,
+.flu-source-help {
+    margin: 8px 0 14px;
+    color: var(--fl-text-3);
+    font-size: 13px;
+    line-height: 1.5;
+}
+.flu-memory-error {
+    margin: 10px 0;
+    border-radius: 14px;
+    padding: 10px 12px;
+    background: var(--fl-error-bg);
+    color: var(--fl-error-text);
+    font-size: 13px;
+}
+.flu-memory-setting {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid var(--fl-border);
+    border-radius: 16px;
+    padding: 12px 14px;
+    background: var(--fl-bg);
+    font-size: 13px;
+}
+.flu-memory-setting p {
+    margin-top: 4px;
+    color: var(--fl-text-4);
+}
+.flu-memory-setting button,
+.flu-memory-actions button,
+.flu-memory-confirm button,
+.flu-source-permission-item button,
+.flu-source-permission-confirm button,
+.flu-source-library-item button {
+    flex: none;
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    padding: 6px 12px;
+    background: var(--fl-bg);
+    color: var(--fl-text-2);
+    font-size: 12px;
+    font-weight: 600;
+}
+.flu-memory-setting button:hover,
+.flu-memory-actions button:hover,
+.flu-source-library-item button:hover {
+    background: var(--fl-hover);
+}
+.flu-memory-list {
+    display: grid;
+    gap: 9px;
+    margin-top: 14px;
+}
+.flu-memory-list li {
+    border: 1px solid var(--fl-divider);
+    border-radius: 16px;
+    padding: 12px 14px;
+    background: var(--fl-bg);
+    overflow-wrap: anywhere;
+}
+.flu-memory-list li > p {
+    font-size: 14px;
+    line-height: 1.5;
+}
+.flu-memory-list small {
+    color: var(--fl-text-4);
+    font-family: var(--fl-mono);
+    font-size: 11px;
+}
+.flu-memory-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 9px;
+    font-size: 12px;
+}
+.flu-memory-actions a {
+    overflow: hidden;
+    min-width: 0;
+    color: var(--fl-link);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.flu-memory-confirm,
+.flu-source-permission-confirm {
+    margin-top: 10px;
+    border: 1px solid var(--fl-error-border);
+    border-radius: 14px;
+    padding: 10px 12px;
+    background: var(--fl-error-bg);
+    color: var(--fl-error-text);
+    font-size: 12px;
+}
+.flu-memory-confirm button,
+.flu-source-permission-confirm button {
+    margin: 8px 7px 0 0;
+}
+.flu-source-library-item,
+.flu-source-permission-item {
+    margin-top: 8px;
+    border: 1px solid var(--fl-divider);
+    border-radius: 14px;
+    padding: 8px 10px;
+    background: var(--fl-bg);
+    font-size: 12px;
+}
+.flu-source-library-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.flu-source-library-item span {
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.flu-source-permission-item > button {
+    width: 100%;
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+.flu-source-permission-item ul {
+    display: grid;
+    gap: 5px;
+    margin-top: 8px;
+}
+.flu-source-permission-item li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 5px;
+}
+
+/* ── Visor de entregables y archivos (riel adyacente) ───────────────────── */
+
+.flu-deliverable-scrim {
+    position: absolute;
+    z-index: 35;
+    inset: 0;
+    border: 0;
+    background: var(--fl-overlay);
+    animation: flu-fade 0.2s ease both;
+}
+.flu-shell.has-side-preview .flu-main {
+    min-width: 0;
+}
+.flu-deliverable-panel,
+.flu-shell .flu-deliverable-panel {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex: 0 0 var(--flu-panel-width, 550px);
+    flex-direction: column;
+    width: var(--flu-panel-width, 550px);
+    height: 100%;
+    overflow: hidden;
+    border: 0;
+    border-left: 1px solid var(--fl-divider);
+    border-radius: 0;
+    background: var(--fl-bg);
+    animation: flu-panel-in 0.26s var(--fl-ease) both;
+}
+.flu-shell .flu-deliverable-panel.is-maximized {
+    position: absolute;
+    z-index: 48;
+    inset: 0;
+    flex: none;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+.flu-shell .flu-memory-panel {
+    flex-basis: min(420px, 40vw);
+    width: min(420px, 40vw);
+}
+.flu-deliverable-panel-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid var(--fl-divider);
+    padding: 18px 20px;
+    background: var(--fl-bg);
+}
+.flu-deliverable-panel-header p {
+    margin: 0 0 5px;
+    color: var(--fl-text-4);
+    font-family: var(--fl-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+}
+.flu-deliverable-panel-header h2 {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--fl-text);
+    font: 600 18px/1.3 var(--fl-font);
+    letter-spacing: -0.01em;
+}
+.flu-deliverable-panel-header button {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    background: var(--fl-bg);
+    color: var(--fl-text-2);
+    font-size: 20px;
+    line-height: 1;
+    transition: background 0.2s var(--fl-ease);
+}
+.flu-deliverable-panel-header button:hover {
+    background: var(--fl-hover);
+}
+.flu-deliverable-panel-actions {
+    display: flex;
+    flex: none;
+    gap: 8px;
+}
+.flu-deliverable-panel-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 8px 20px 24px;
+}
+.flu-deliverable-panel-content.is-source-viewer {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+}
+.flu-deliverable-panel.is-source-panel .flu-deliverable-panel-header {
+    align-items: center;
+    padding: 12px 16px;
+}
+.flu-deliverable-panel.is-source-panel .flu-deliverable-panel-header > div:first-child {
+    min-width: 0;
+}
+.flu-deliverable-panel.is-source-panel .flu-deliverable-panel-header h2 {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 15px;
+}
+.flu-deliverable-panel .flu-deliverable-card {
+    margin-top: 12px;
+}
+.flu-deliverable-panel-content .grid {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+/* Los documentos se leen como documentos: papel blanco y serif, también en modo oscuro. */
+.flu-document-page {
+    width: min(100%, 760px);
+    margin: 0 auto;
+    overflow-wrap: anywhere;
+    border: 1px solid var(--fl-paper-border);
+    padding: clamp(24px, 5vw, 58px);
+    background: var(--fl-paper);
+    box-shadow: var(--fl-shadow-float);
+    color: var(--fl-paper-text);
+    font: 15px/1.75 var(--fl-serif);
+}
+.flu-document-header {
+    margin-bottom: 30px;
+    border-bottom: 1px solid #dde2ea;
+    padding-bottom: 21px;
+}
+.flu-document-header span {
+    color: #4b5466;
+    font: 500 11px/1.4 var(--fl-mono);
+    letter-spacing: 0.04em;
+}
+.flu-document-header h2 {
+    margin: 12px 0 7px;
+    color: #141923;
+    font: 600 clamp(20px, 2.2vw, 27px) / 1.3 var(--fl-font);
+    letter-spacing: -0.02em;
+}
+.flu-document-header p {
+    color: #4b5466;
+    font: 13px/1.5 var(--fl-font);
+}
+.flu-document-page section + section {
+    margin-top: 23px;
+}
+.flu-document-page h3 {
+    margin-bottom: 8px;
+    color: #141923;
+    font: 600 14px/1.4 var(--fl-font);
+}
+.flu-document-page p {
+    margin: 0;
+    white-space: pre-wrap;
+}
+.flu-document-page > p + p {
+    margin-top: 16px;
+}
+.flu-document-page ol {
+    margin: 0;
+    padding-left: 23px;
+    list-style: decimal;
+}
+.flu-document-page li + li {
+    margin-top: 8px;
+}
+.flu-document-page dl div {
+    display: grid;
+    grid-template-columns: minmax(90px, 1fr) 2fr;
+    gap: 12px;
+    border-bottom: 1px solid #eceff4;
+    padding: 7px 0;
+}
+.flu-document-page dt {
+    font-weight: 600;
+}
+
+/* Vista de archivos fuente */
+.flu-source-preview {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    color: var(--fl-text-2);
+    font-size: 14px;
+}
+.flu-source-preview-toolbar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 40px;
+    padding: 6px 14px;
+    color: var(--fl-text-4);
+    font-size: 12px;
+}
+.flu-source-preview-toolbar > div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+}
+.flu-pdf-document {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+.flu-pdf-toolbar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 42px;
+    border-top: 1px solid var(--fl-divider);
+    border-bottom: 1px solid var(--fl-divider);
+    padding: 5px 14px;
+    color: var(--fl-text-3);
+    font-size: 12px;
+    font-weight: 500;
+}
+.flu-pdf-toolbar > div {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.flu-pdf-toolbar button {
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    padding: 4px 12px;
+    background: var(--fl-bg);
+    color: var(--fl-text-2);
+    font-size: 13px;
+    font-weight: 600;
+}
+.flu-pdf-toolbar button:disabled {
+    cursor: default;
+    opacity: 0.45;
+}
+.flu-pdf-toolbar > div > span {
+    min-width: 43px;
+    font-family: var(--fl-mono);
+    text-align: center;
+}
+.flu-pdf-pages {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    min-height: 0;
+    overflow: auto;
+    padding: 14px 16px 28px;
+    background: var(--fl-hover-strong);
+}
+.flu-pdf-page {
+    position: relative;
+    flex: none;
+    max-width: none;
+    background: #fff;
+    box-shadow: var(--fl-shadow-float);
+}
+.flu-pdf-page canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+}
+.flu-pdf-page canvas.is-ready {
+    opacity: 1;
+}
+.flu-pdf-page-placeholder {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: #677184;
+    font-size: 12px;
+}
+.flu-pdf-page-number {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    border-radius: 999px;
+    padding: 2px 8px;
+    background: rgb(20 25 35 / 0.72);
+    color: #fff;
+    font-family: var(--fl-mono);
+    font-size: 10px;
+}
+.flu-pdf-document.is-edge-to-edge .flu-pdf-pages {
+    align-items: flex-start;
+    gap: 10px;
+    padding: 0 0 20px;
+}
+.flu-pdf-document.is-edge-to-edge .flu-pdf-page {
+    margin: 0 auto;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+.flu-source-preview-text {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    overflow-wrap: anywhere;
+    border-top: 1px solid var(--fl-divider);
+    padding: clamp(24px, 4vw, 52px);
+    background: var(--fl-paper);
+    color: var(--fl-paper-text);
+    font: 14px/1.8 var(--fl-mono);
+    white-space: pre-wrap;
+}
+.flu-source-preview-docx {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    border-top: 1px solid var(--fl-divider);
+    background: var(--fl-hover-strong);
+}
+.flu-source-preview-docx .docx-wrapper {
+    min-height: 100%;
+    padding: 12px;
+    background: transparent;
+}
+.flu-source-preview-docx .docx-wrapper > section.docx {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: none;
+    margin: 0 auto 14px;
+    padding: clamp(18px, 4vw, 55px) !important;
+    box-shadow: var(--fl-shadow-float);
+}
+.flu-source-preview-status {
+    margin: 0;
+    padding: 16px;
+}
+.flu-source-preview-video {
+    width: 100%;
+    max-height: 55vh;
+    border-radius: 16px;
+    background: #0b0f17;
+}
+.flu-source-download {
+    display: inline-flex;
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    padding: 7px 12px;
+    background: var(--fl-bg);
+    color: var(--fl-text-2);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Archivo abierto dentro del visor */
+.flu-deliverable-open-file {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    margin: 0 !important;
+}
+.flu-open-file-toolbar {
+    display: flex;
+    flex: none;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border-bottom: 1px solid var(--fl-divider);
+    padding: 8px 14px;
+    color: var(--fl-text-3);
+    font-size: 12px;
+}
+.flu-open-file-toolbar label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.flu-open-file-toolbar select {
+    max-width: 160px;
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    padding: 5px 10px;
+    background: var(--fl-bg);
+    color: var(--fl-text-2);
+}
+.flu-open-file-toolbar > div {
+    display: flex;
+    gap: 6px;
+}
+.flu-open-file-toolbar button {
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    padding: 6px 12px;
+    background: var(--fl-bg);
+    color: var(--fl-text-2);
+    font-size: 12px;
+    font-weight: 500;
+}
+.flu-open-file-toolbar button:disabled {
+    cursor: default;
+    opacity: 0.45;
+}
+.flu-open-file-view {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    padding: 15px;
+}
+.flu-open-file-view.is-document {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+}
+.flu-open-file-error {
+    margin: 0;
+    padding: 8px 14px;
+    color: var(--fl-error-text);
+    font-size: 13px;
+}
+.flu-open-editor-link {
+    display: block;
+    flex: none;
+    border-bottom: 1px solid var(--fl-divider);
+    padding: 9px 14px;
+    color: var(--fl-link);
+    font-size: 13px;
+    font-weight: 500;
+    text-align: right;
+}
+
+/* Diagramas */
+.flu-diagram-view {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: min(75vh, 800px);
+}
+.flu-diagram-view > p {
+    color: var(--fl-text-3);
+    font-size: 13px;
+}
+.flu-diagram-canvas {
+    position: relative;
+    height: min(75vh, 900px);
+    min-height: 600px;
+    overflow: hidden;
+    border: 1px solid var(--fl-border);
+    border-radius: 20px;
+    background: #fff;
+}
+.flu-diagram-canvas > * {
+    width: 100%;
+    height: 100%;
+}
+.flu-diagram-error,
+.flu-diagram-loading {
+    padding: 16px;
+    color: var(--fl-text-3);
+    font-size: 13px;
+}
+.flu-diagram-interactive {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+.flu-diagram-zoom-controls {
+    position: absolute;
+    z-index: 2;
+    right: 10px;
+    bottom: 10px;
+    display: flex;
+    gap: 4px;
+    border: 1px solid #dde2ea;
+    border-radius: 999px;
+    padding: 4px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(20 25 35 / 0.06), 0 8px 24px rgb(20 25 35 / 0.1);
+}
+.flu-diagram-zoom-controls button {
+    display: grid;
+    place-items: center;
+    min-width: 38px;
+    min-height: 38px;
+    border-radius: 999px;
+    color: #353c4b;
+    font-size: 20px;
+    font-weight: 600;
+}
+.flu-diagram-zoom-controls button:hover {
+    background: #f4f6f9;
+}
+
+/* ── Directorio y diálogos ──────────────────────────────────────────────── */
+
+.flu-directory {
+    background: var(--fl-bg);
+}
+.flu-directory-inner {
+    max-width: 960px;
+    margin: 0 auto;
+}
+.flu-directory h1 {
+    margin-top: 8px;
+    color: var(--fl-text);
+    font: 600 clamp(26px, 3vw, 34px) / 1.2 var(--fl-font);
+    letter-spacing: -0.02em;
+}
+.flu-directory-intro {
+    margin: 8px 0 28px;
+    color: var(--fl-text-3);
+    font-size: 14px;
+}
+.flu-directory-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px;
+}
+.flu-directory-grid section {
+    min-width: 0;
+}
+.flu-directory-grid h2 {
+    margin-bottom: 10px;
+    color: var(--fl-text-4);
+    font-family: var(--fl-mono);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.flu-directory-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    border-bottom: 1px solid var(--fl-divider);
+    padding: 12px 4px;
+    color: var(--fl-text);
+    font-size: 14px;
+    text-align: left;
+    transition:
+        color 0.2s var(--fl-ease),
+        transform 0.2s var(--fl-ease);
+}
+.flu-directory-item:hover {
+    color: var(--fl-primary);
+    transform: translateX(3px);
+}
+.flu-directory-item svg {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    color: var(--fl-text-4);
+}
+.flu-directory-item span:nth-child(2) {
+    flex: 1;
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.flu-directory-empty {
+    color: var(--fl-text-4);
+    font-size: 13px;
+}
+.flu-directory-more {
+    margin-top: 12px;
+    color: var(--fl-link);
+    font-size: 13px;
+    font-weight: 600;
+}
+.flu-directory-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+.flu-directory-section-head h2 {
+    margin-bottom: 0;
+}
+.flu-directory-section-head button {
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    padding: 7px 14px;
+    color: var(--fl-text-2);
+    font-size: 13px;
+    font-weight: 600;
+}
+.flu-directory-section-head button:hover {
+    background: var(--fl-hover);
+}
+
+.flu-move-backdrop {
+    position: absolute;
+    z-index: 50;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: var(--fl-overlay);
+    animation: flu-fade 0.2s ease both;
+}
+.flu-move-dialog {
+    width: min(100%, 460px);
+    border: 1px solid var(--fl-divider);
+    border-radius: 24px;
+    padding: 24px;
+    background: var(--fl-bg);
+    box-shadow: var(--fl-shadow-menu);
+    color: var(--fl-text-3);
+    font-size: 14px;
+    animation: flu-appear 0.24s var(--fl-ease) both;
+}
+.flu-move-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+.flu-move-head p {
+    color: var(--fl-primary);
+    font-family: var(--fl-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+}
+.flu-move-head h2 {
+    margin: 4px 0 12px;
+    color: var(--fl-text);
+    font: 600 22px var(--fl-font);
+    letter-spacing: -0.02em;
+}
+.flu-move-head button {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    color: var(--fl-text-3);
+    font-size: 22px;
+}
+.flu-move-head button:hover {
+    background: var(--fl-hover);
+}
+.flu-move-dialog select {
+    width: 100%;
+    margin-top: 18px;
+    border: 1px solid var(--fl-border-strong);
+    border-radius: 12px;
+    padding: 10px 12px;
+    background: var(--fl-bg);
+    color: var(--fl-text);
+}
+.flu-move-summary {
+    display: grid;
+    gap: 7px;
+    margin-top: 16px;
+    border-radius: 16px;
+    padding: 14px;
+    background: var(--fl-primary-subtle);
+    color: var(--fl-text-2);
+}
+.flu-move-summary strong {
+    color: var(--fl-primary-text);
+}
+.flu-move-summary small {
+    color: var(--fl-text-3);
+}
+.flu-move-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+.flu-move-actions button {
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    padding: 9px 16px;
+    background: var(--fl-bg);
+    color: var(--fl-text-2);
+    font-weight: 600;
+}
+.flu-move-actions button:last-child {
+    border-color: var(--fl-primary);
+    background: var(--fl-primary);
+    color: #fff;
+}
+.flu-move-actions button:last-child:hover:not(:disabled) {
+    background: var(--fl-primary-hover);
+}
+.flu-move-actions button:disabled {
+    opacity: 0.5;
+}
+.flu-project-create-dialog form {
+    display: grid;
+    gap: 8px;
+    margin-top: 17px;
+}
+.flu-project-create-dialog form > label {
+    color: var(--fl-text-2);
+    font-size: 13px;
+    font-weight: 600;
+}
+.flu-project-create-dialog form > label:not(:first-child) {
+    margin-top: 7px;
+}
+.flu-project-create-dialog form > label span {
+    color: var(--fl-text-4);
+    font-weight: 400;
+}
+.flu-project-create-dialog input,
+.flu-project-create-dialog textarea {
+    width: 100%;
+    border: 1px solid var(--fl-border-strong);
+    border-radius: 12px;
+    padding: 10px 12px;
+    background: var(--fl-bg);
+    color: var(--fl-text);
+    font: inherit;
+}
+.flu-project-create-dialog textarea {
+    resize: vertical;
+}
+.flu-project-create-dialog input:focus-visible,
+.flu-project-create-dialog textarea:focus-visible {
+    border-color: var(--fl-primary);
+    outline: 0;
+    box-shadow: 0 0 0 3px var(--fl-primary-subtle);
+}
+.flu-project-create-dialog .flu-move-actions {
+    margin-top: 11px;
+}
+.flu-project-create-error {
+    margin-top: 4px;
+    border-radius: 12px;
+    padding: 9px 12px;
+    background: var(--fl-error-bg);
+    color: var(--fl-error-text);
+}
+
+/* ── Foco y pulsación ───────────────────────────────────────────────────── */
+
+.flu-shell button:focus-visible,
+.flu-shell textarea:focus-visible,
+.flu-shell input:focus-visible,
+.flu-shell select:focus-visible,
+.flu-shell a:focus-visible {
+    outline: 2px solid var(--fl-primary);
+    outline-offset: 2px;
+}
+.flu-shell .flu-chat-composer-input:focus-visible,
+.flu-shell .flu-search input:focus-visible,
+.flu-shell .flu-project-create-dialog input:focus-visible,
+.flu-shell .flu-project-create-dialog textarea:focus-visible {
+    outline: none;
+}
+.flu-shell button:active:not(:disabled) {
+    transform: scale(0.975);
+}
+
+/* ── Animaciones ────────────────────────────────────────────────────────── */
+
+@keyframes flu-appear {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+@keyframes flu-pulse {
+    0%,
+    65%,
+    100% {
+        opacity: 0.3;
+        transform: translateY(0);
+    }
+    30% {
+        opacity: 1;
+        transform: translateY(-3px);
+    }
+}
+/* flu-spin se define en globals.css y se comparte con el resto de la app. */
+@keyframes flu-fade {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+@keyframes flu-panel-in {
+    from {
+        opacity: 0.6;
+        transform: translateX(22px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+@keyframes flu-nav-item-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+@keyframes flu-dictation-pulse {
+    50% {
+        box-shadow: 0 0 0 7px color-mix(in srgb, var(--fl-error) 12%, transparent);
+    }
+}
+@keyframes flu-chat-skeleton-sweep {
+    to {
+        background-position-x: -220%;
+    }
+}
+@keyframes flu-upload-working {
+    from {
+        transform: translateX(-110%);
+    }
+    to {
+        transform: translateX(440%);
+    }
+}
+
+.flu-shell.nav-open .flu-brand {
+    animation: flu-nav-item-in 0.26s 0.04s both;
+}
+.flu-shell.nav-open .flu-label,
+.flu-shell.nav-open .flu-primary {
+    animation: flu-nav-item-in 0.28s 0.09s both;
+}
+.flu-shell.nav-open .flu-search {
+    animation: flu-nav-item-in 0.28s 0.14s both;
+}
+.flu-shell.nav-open .flu-nav-list {
+    animation: flu-nav-item-in 0.3s 0.19s both;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 1200px) {
+    .flu-context {
+        position: absolute;
+        z-index: 12;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        flex: none;
+        width: min(85vw, var(--flu-context-width, 330px));
+        box-shadow: var(--fl-shadow-menu);
+    }
+}
+@media (max-width: 940px) {
+    .flu-directory-grid {
+        grid-template-columns: 1fr;
+    }
+    .flu-shell .flu-deliverable-panel {
+        position: absolute;
+        z-index: 36;
+        right: 0;
+        flex: none;
+        width: min(100%, var(--flu-panel-width, 550px));
+        box-shadow: var(--fl-shadow-menu);
+    }
+}
+@media (max-width: 760px) {
+    .flu-nav {
+        position: absolute;
+        z-index: 20;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: min(300px, 83vw);
+        box-shadow: var(--fl-shadow-menu);
+    }
+    .flu-shell.nav-open .flu-nav {
+        width: min(300px, 83vw);
+        flex-basis: auto;
+    }
+    .flu-shell.nav-open .flu-mobile-backdrop {
+        position: absolute;
+        z-index: 19;
+        inset: 0;
+        display: block;
+        border: 0;
+        background: var(--fl-overlay);
+    }
+    .flu-message.flu-user {
+        max-width: 96%;
+    }
+    .flu-chat-composer-hint {
+        display: none;
+    }
+    .flu-chat-composer-toolbar {
+        justify-content: space-between;
+    }
+    .flu-chat-scroll-bottom {
+        right: 18px;
+        bottom: 155px;
+    }
+    .flu-shell .flu-deliverable-panel {
+        width: 100%;
+    }
+    .flu-rail-resize-handle {
+        display: none;
+    }
+    .flu-welcome-wrap {
+        padding-top: 120px !important;
+    }
+    .flu-welcome-wrap::before {
+        height: 112px;
+    }
+}
+@media (max-width: 600px) {
+    .flu-nav {
+        position: absolute;
+        z-index: 20;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        flex: none;
+        width: min(300px, 83vw);
+    }
+    .flu-topbar {
+        flex-wrap: nowrap;
+        gap: 8px;
+        min-height: 56px;
+        padding: 8px 12px;
+    }
+    .flu-breadcrumb {
+        flex: 1;
+        gap: 6px;
+        min-width: 0;
+    }
+    .flu-breadcrumb > span {
+        display: none;
+    }
+    .flu-breadcrumb strong {
+        min-width: 0;
+        max-width: none;
+    }
+    .flu-chat-rename-trigger {
+        overflow: hidden;
+        max-width: 100%;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .flu-chat-rename-trigger svg {
+        margin-left: auto;
+    }
+    .flu-chat-rename-form {
+        flex-wrap: wrap;
+    }
+    .flu-chat-rename-form input {
+        width: min(100%, 170px);
+    }
+    .flu-icon-button,
+    .flu-context-topbar-button {
+        min-width: 40px;
+        min-height: 40px;
+    }
+    .flu-context {
+        position: absolute;
+        z-index: 32;
+        inset: 0;
+        flex-basis: 100%;
+        width: 100%;
+        max-width: none;
+        border-left: 0;
+    }
+    .flu-shell .flu-deliverable-panel,
+    .flu-shell .flu-memory-panel {
+        inset: 0;
+        flex-basis: 100%;
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+    }
+    .flu-deliverable-panel-header {
+        padding: 12px 15px;
+    }
+    .flu-deliverable-panel-header h2 {
+        font-size: 16px;
+    }
+    .flu-deliverable-panel-header button,
+    .flu-context-heading button {
+        min-width: 40px;
+        min-height: 40px;
+    }
+    .flu-deliverable-panel-content {
+        padding: 8px 12px 22px;
+    }
+    .flu-composer-area {
+        padding: 8px 10px max(8px, env(safe-area-inset-bottom));
+    }
+    .flu-chat-composer {
+        border-radius: 24px;
+        padding: 12px 10px 10px 16px;
+    }
+    .flu-chat-composer-input {
+        min-height: 48px;
+        max-height: min(35dvh, 176px);
+        font-size: 16px;
+    }
+    .flu-chat-composer-toolbar {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        gap: 6px;
+    }
+    .flu-chat-composer-attach,
+    .flu-chat-composer-dictate,
+    .flu-chat-composer-send {
+        min-width: 42px;
+        min-height: 42px;
+    }
+    .flu-chat-composer-attach {
+        justify-content: center;
+        padding: 0 11px;
+    }
+    .flu-chat-composer-attach span {
+        display: none;
+    }
+    .flu-chat-composer-model {
+        flex: 1 1 92px;
+        min-width: 80px;
+        max-width: none;
+        height: 42px;
+    }
+    .flu-chat-composer-model-status {
+        flex: 1;
+    }
+    .flu-chat-composer-dictate {
+        margin-left: auto;
+    }
+    .flu-chat-attachment-tray {
+        flex-wrap: nowrap;
+        max-width: 100%;
+        overflow-x: auto;
+        padding: 0 0 5px;
+        scrollbar-width: thin;
+    }
+    .flu-chat-attachment {
+        flex: none;
+        max-width: min(295px, 83vw);
+    }
+    .flu-chat-attachment-name {
+        max-width: 125px;
+    }
+    .flu-chat-attachment button {
+        min-width: 30px;
+        min-height: 30px;
+    }
+    .flu-log {
+        padding: 12px 11px;
+    }
+    .flu-message.flu-user {
+        max-width: 100%;
+    }
+    .flu-message.flu-assistant {
+        margin-left: 6px;
+        padding-left: 14px;
+    }
+    .flu-chat-scroll-bottom {
+        right: 13px;
+        bottom: 130px;
+    }
+    .flu-welcome-wrap {
+        padding: 104px 14px 20px !important;
+    }
+    .flu-welcome-wrap::before {
+        height: 96px;
+    }
+    .flu-welcome-card h1 {
+        margin-bottom: 6px;
+    }
+    .flu-directory {
+        padding: 16px;
+    }
+    .flu-directory-grid {
+        gap: 22px;
+    }
+    .flu-move-backdrop {
+        align-items: end;
+        padding: 0;
+    }
+    .flu-move-dialog {
+        max-height: min(90dvh, 760px);
+        overflow-y: auto;
+        border-radius: 24px 24px 0 0;
+        padding: 20px 16px max(20px, env(safe-area-inset-bottom));
+    }
+    .flu-pdf-toolbar {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 5px;
+        padding: 7px;
+    }
+    .flu-pdf-toolbar button {
+        min-height: 36px;
+    }
+    .flu-pdf-pages {
+        padding: 9px 7px 18px;
+    }
+    .flu-source-preview-text {
+        padding: 17px 13px;
+        font-size: 13px;
+    }
+    .flu-source-preview-docx .docx-wrapper {
+        padding: 7px;
+    }
+    .flu-diagram-view {
+        min-height: 0;
+    }
+    .flu-diagram-canvas {
+        height: min(58dvh, 560px);
+        min-height: 0;
+    }
+    .flu-upload-batch button,
+    .flu-upload-reselect {
+        min-height: 40px;
+    }
+    .flu-upload-file {
+        padding: 9px;
+    }
+    .flu-open-file-toolbar {
+        padding: 7px 9px;
+    }
+    .flu-open-file-toolbar select,
+    .flu-open-file-toolbar button {
+        min-height: 38px;
+    }
+    .flu-chat-activity summary {
+        min-height: 42px;
+    }
+    .flu-composer-area > .flu-upload-batch {
+        max-height: 25dvh;
+    }
+}
+
+/* Movimiento reducido: sin animaciones ni desplazamientos. */
+@media (prefers-reduced-motion: reduce) {
+    .flu-shell *,
+    .flu-shell *::before,
+    .flu-shell *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    .flu-chat-composer.is-working::after {
+        display: none;
+    }
+    .flu-directory-item,
+    .flu-message-part-deliverable {
+        transform: none !important;
+    }
+}

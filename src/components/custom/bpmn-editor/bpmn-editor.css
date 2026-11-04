@@ -1,0 +1,263 @@
+/* Estilos del editor BPMN embebido (marcadores propios + swatches del context-pad). */
+
+.flu-bpmn-canvas {
+    width: 100%;
+    height: 100%;
+    background: #fff;
+}
+
+/* Sin borde/outline negro al enfocar el lienzo. */
+.flu-bpmn-canvas:focus,
+.flu-bpmn-canvas:focus-visible,
+.flu-bpmn-canvas .djs-container:focus,
+.flu-bpmn-canvas .djs-container:focus-visible {
+    outline: none;
+}
+
+/* Swatches de color en el context-pad (módulo color-context-pad) */
+.djs-context-pad .color-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+/* Parpadeo al saltar a la ref pareja (módulo ref-jump) */
+.ref-jump-flash .djs-visual > :nth-child(1) {
+    stroke: #f59e0b !important;
+    stroke-width: 3px !important;
+}
+.ref-jump-flash .djs-visual > :nth-child(1)[fill]:not([fill="none"]) {
+    fill: #fef3c7 !important;
+}
+
+/* ── Badges de riesgos / controles / oportunidades (overlays HTML) ── */
+.flu-badges {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    white-space: nowrap;
+}
+.flu-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font: 700 10px/1 "Inter", system-ui, sans-serif;
+    color: #fff;
+    padding: 3px 6px;
+    border-radius: 999px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+    cursor: default;
+    user-select: none;
+}
+.flu-chip.flu-risk { background: #dc2626; } /* riesgo */
+.flu-chip.flu-ctrl { background: #2563eb; } /* control */
+.flu-chip.flu-opp { background: #16a34a; }  /* oportunidad */
+
+/* Badges RCO (figuras SVG con conteo) sobre la actividad. Contenedor de ancho
+   fijo alineado a la derecha, para anclarse al borde derecho sin sobresalir. */
+.flu-badges {
+    display: flex;
+    width: 54px;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 2px;
+    cursor: pointer;
+    pointer-events: all;
+}
+.flu-badge-svg {
+    flex: none;
+    filter: drop-shadow(0 1px 1.5px rgba(15, 23, 42, 0.28));
+}
+
+/* ── Paleta modernizada (tono unificado nativo + nuevos íconos) ── */
+.djs-palette {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.10);
+    overflow: hidden;
+}
+/* Mismo tono para TODOS los íconos (los nativos eran negros). */
+.djs-palette .entry,
+.djs-palette .djs-palette-toggle {
+    color: #475569;
+}
+.djs-palette .entry:hover {
+    color: #1a3e7f;
+    background: #f1f5f9;
+    border-radius: 8px;
+}
+.djs-palette .group[data-group="flu-help"] {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid #e2e8f0;
+}
+/* Íconos de VISTA (untitledui) centrados en su casilla; activo bien evidente. */
+.djs-palette .entry.flu-view-entry {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.djs-palette .entry.flu-view-entry.flu-active,
+.djs-palette .entry.flu-view-entry.flu-active:hover {
+    color: #fff;
+    background: #1a3e7f;
+    border-radius: 8px;
+}
+
+/* ── Panel de simbología (modal centrado) ── */
+.flu-legend-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 11;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.35);
+    padding: 20px;
+}
+.flu-legend {
+    width: min(560px, 100%);
+    max-height: 100%;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.3);
+    padding: 16px 18px 14px;
+    font-family: "Inter", system-ui, sans-serif;
+}
+.flu-legend-head {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1a3e7f;
+    margin-bottom: 8px;
+}
+.flu-legend-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 24px;
+    align-items: start;
+}
+.flu-legend-conn {
+    width: 42px;
+    display: inline-flex;
+    justify-content: center;
+    flex: none;
+}
+.flu-legend-foot {
+    margin-top: 12px;
+    padding-top: 8px;
+    border-top: 1px solid #f1f5f9;
+    font-size: 10px;
+    color: #94a3b8;
+    text-align: right;
+}
+.flu-legend-section {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin: 10px 0 4px;
+}
+.flu-legend-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 3px 0;
+}
+.flu-legend-icon {
+    width: 24px;
+    text-align: center;
+    font-size: 19px;
+    color: #334155;
+    flex: none;
+}
+.flu-legend-chip {
+    width: 24px;
+    justify-content: center;
+    padding: 3px 0;
+    flex: none;
+}
+.flu-legend-swatches {
+    display: inline-flex;
+    gap: 2px;
+    width: 24px;
+    justify-content: center;
+    flex: none;
+}
+.flu-legend-swatches i {
+    width: 6px;
+    height: 14px;
+    border-radius: 2px;
+    border: 1px solid;
+}
+.flu-legend-label {
+    font-size: 12px;
+    color: #334155;
+}
+
+/* ── Animaciones sutiles (solo si el usuario no pidió reducir movimiento) ──
+   Nada toca el transform de los elementos: diagram-js lo usa para posicionar,
+   así que animar transform ahí rompería el arrastre. Solo color/opacidad/filtro. */
+@media (prefers-reduced-motion: no-preference) {
+    /* El color de figuras y líneas transiciona suave (premia los toggles). */
+    .flu-bpmn-canvas .djs-element .djs-visual > :is(rect, circle, ellipse, path, polygon) {
+        transition: fill 0.35s ease, stroke 0.3s ease;
+    }
+
+    /* Leve elevación al pasar el cursor por una figura. */
+    .flu-bpmn-canvas .djs-shape .djs-visual {
+        transition: filter 0.18s ease;
+    }
+    .flu-bpmn-canvas .djs-shape.hover .djs-visual {
+        filter: drop-shadow(0 3px 7px rgba(24, 106, 167, 0.28));
+    }
+
+    /* El diagrama "llega" en fade al generar/cargar (clase la pone el componente). */
+    .flu-bpmn-canvas.flu-enter svg {
+        animation: flu-diagram-in 0.42s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    }
+    @keyframes flu-diagram-in {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: none; }
+    }
+
+    /* El menú contextual aparece con un pequeño fade + escala. */
+    .djs-context-pad.open {
+        animation: flu-pad-in 0.16s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    }
+    @keyframes flu-pad-in {
+        from { opacity: 0; transform: scale(0.9); }
+        to { opacity: 1; transform: scale(1); }
+    }
+    .djs-context-pad .entry {
+        transition: background 0.12s ease, transform 0.08s ease;
+    }
+
+    /* Los badges de RCO aparecen con un leve pop. */
+    .flu-chip {
+        animation: flu-chip-in 0.22s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    }
+    @keyframes flu-chip-in {
+        from { opacity: 0; transform: scale(0.6); }
+        to { opacity: 1; transform: scale(1); }
+    }
+
+    /* El panel de simbología entra deslizando desde la esquina. */
+    .flu-legend {
+        animation: flu-legend-in 0.2s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    }
+    @keyframes flu-legend-in {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: none; }
+    }
+}
+/* The standalone editor belongs to the chat workspace and keeps its toolbar usable on phones. */
+.flu-editor-toolbar-actions { max-width: 100%; }
+@media (max-width: 760px) {
+    .flu-editor-toolbar { flex-wrap: wrap; padding: 11px 14px !important; }
+    .flu-editor-toolbar-actions { width: 100%; overflow-x: auto; padding-bottom: 4px; }
+    .flu-editor-toolbar-actions > * { flex-shrink: 0; }
+}

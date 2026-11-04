@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es" translate="no">
+    <head>
+        <meta charset="UTF-8" />
+        <link rel="icon" type="image/svg+xml" href="/landing/img/logo-fluence.svg" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="description" content="Flu3nce reúne conversaciones, fuentes y entregables para trabajar con claridad." />
+        <!-- La app es solo en español: se desactiva la traducción automática del
+             navegador (Edge/Chrome). El traductor muta el DOM y hace que React
+             falle con "removeChild ... not a child of this node". -->
+        <meta name="google" content="notranslate" />
+        <meta name="theme-color" content="#1F4BD8" />
+
+        <!-- Sistema de diseño Flu3nce: Geist (interfaz), Geist Mono (datos) y Source Serif 4 (documentos). -->
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap"
+            rel="stylesheet"
+        />
+
+        <title>Flu3nce</title>
+
+        <script>
+            // Aplica el tema antes de pintar para evitar el destello. Usa la misma clave que ThemeProvider ("ui-theme").
+            try {
+                if (localStorage.getItem("ui-theme") === "dark") document.documentElement.classList.add("dark-mode");
+            } catch (error) {
+                // Sin acceso a localStorage: queda el tema claro hasta que cargue la app.
+            }
+        </script>
+    </head>
+
+    <body class="size-full bg-primary antialiased">
+        <div id="root"></div>
+        <script type="module" src="/src/main.tsx"></script>
+    </body>
+</html>

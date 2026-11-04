@@ -1,0 +1,3 @@
+[submodule "contract"]
+	path = contract
+	url = https://github.com/Luis-David-Echeverria/flu3nce-contract.git

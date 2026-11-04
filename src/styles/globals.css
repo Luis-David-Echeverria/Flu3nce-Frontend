@@ -1,0 +1,318 @@
+@import "tailwindcss";
+@import "./theme.css";
+@import "./typography.css";
+
+@plugin "@tailwindcss/typography";
+@plugin "tailwindcss-react-aria-components";
+@plugin "tailwindcss-animate";
+
+@custom-variant dark (&:where(.dark-mode, .dark-mode *));
+@custom-variant label (& [data-label]);
+@custom-variant focus-input-within (&:has(input:focus));
+
+@utility scrollbar-hide {
+    /* For Webkit-based browsers (Chrome, Safari and Opera) */
+    &::-webkit-scrollbar {
+        display: none;
+        -webkit-appearance: none;
+    }
+
+    /* For IE, Edge and Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+}
+
+@utility transition-inherit-all {
+    transition-property: inherit;
+    transition-duration: inherit;
+    transition-timing-function: inherit;
+}
+
+/* FLU3NCE · CORRIENTE (alternativa C del sistema de diseño)
+ *
+ * Tokens de superficie para las hojas propias de la app (chat, login, paneles).
+ * Son los mismos valores que la escala de theme.css; se declaran aquí como variables
+ * planas para que existan siempre, sin depender de qué utilidades use Tailwind.
+ */
+:root {
+    --fl-font: "Geist", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --fl-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --fl-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --fl-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+    --fl-bg: #ffffff;
+    --fl-bg-subtle: #f4f6f9;
+    --fl-surface-2: #fafbfc;
+    --fl-hover: #f4f6f9;
+    --fl-hover-strong: #eceff4;
+    --fl-border: #dde2ea;
+    --fl-border-strong: #c3cad6;
+    --fl-divider: #eceff4;
+
+    --fl-text: #141923;
+    --fl-text-2: #353c4b;
+    --fl-text-3: #4b5466;
+    --fl-text-4: #677184;
+    --fl-icon-muted: #929bab;
+
+    --fl-primary: #1f4bd8;
+    --fl-primary-hover: #1a3cb0;
+    --fl-primary-text: #1a3cb0;
+    --fl-primary-subtle: #eef3ff;
+    --fl-primary-subtle-2: #dce6ff;
+    --fl-primary-line: #bcceff;
+    --fl-link: #1f4bd8;
+    --fl-focus: #8eabff;
+
+    --fl-success: #12805c;
+    --fl-success-bg: #e7f5ef;
+    --fl-success-text: #0b5c42;
+    --fl-warning: #b25e09;
+    --fl-warning-bg: #fdf1e3;
+    --fl-warning-text: #7f4204;
+    --fl-error: #c8322b;
+    --fl-error-bg: #fcebea;
+    --fl-error-text: #8f1f1a;
+    --fl-error-border: #f2c4c1;
+
+    --fl-overlay: rgb(10 14 22 / 0.42);
+    --fl-shadow-xs: 0 1px 2px rgb(20 25 35 / 0.08);
+    --fl-shadow-menu: 0 1px 2px rgb(20 25 35 / 0.06), 0 8px 24px rgb(20 25 35 / 0.1);
+    --fl-shadow-float: 0 1px 2px rgb(20 25 35 / 0.05), 0 12px 32px rgb(20 25 35 / 0.08);
+
+    /* Los documentos se muestran siempre en papel: así se imprimen y se envían. */
+    --fl-paper: #ffffff;
+    --fl-paper-text: #141923;
+    --fl-paper-border: #dde2ea;
+
+    /* Ola plana de los estados vacíos: azul 50 y 100 con la línea de corriente en azul 600. */
+    --fl-wave: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1176 160' preserveAspectRatio='none'%3E%3Cpath d='M0 0H1176V96C1010 132 880 70 700 92S330 150 0 110Z' fill='%23EEF3FF'/%3E%3Cpath d='M0 0H1176V52C1030 80 900 30 720 48S340 96 0 62Z' fill='%23DCE6FF'/%3E%3Cpath d='M0 110C330 150 520 70 700 92S1010 132 1176 96' fill='none' stroke='%231F4BD8' stroke-width='1.5' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+}
+
+/* Modo oscuro: base 0B0F17 con tinte azul; la elevación aclara en vez de sombrear. */
+.dark-mode {
+    color-scheme: dark;
+
+    --fl-bg: #0b0f17;
+    --fl-bg-subtle: #10151e;
+    --fl-surface-2: #10151e;
+    --fl-hover: #161c27;
+    --fl-hover-strong: #1c2330;
+    --fl-border: #262e3c;
+    --fl-border-strong: #343d4e;
+    --fl-divider: #1c2330;
+
+    --fl-text: #e9edf3;
+    --fl-text-2: #c9d0db;
+    --fl-text-3: #a9b2c1;
+    --fl-text-4: #8590a2;
+    --fl-icon-muted: #5a6578;
+
+    --fl-primary: #3461f0;
+    --fl-primary-hover: #1f4bd8;
+    --fl-primary-text: #bcceff;
+    --fl-primary-subtle: #16224a;
+    --fl-primary-subtle-2: #1e2e64;
+    --fl-primary-line: #2a3f80;
+    --fl-link: #8eabff;
+    --fl-focus: #5a80fa;
+
+    --fl-success: #37c88d;
+    --fl-success-bg: #0f2a22;
+    --fl-success-text: #5fd9a6;
+    --fl-warning: #f0a14a;
+    --fl-warning-bg: #2e2112;
+    --fl-warning-text: #f5b76a;
+    --fl-error: #f07068;
+    --fl-error-bg: #331a1b;
+    --fl-error-text: #f59b94;
+    --fl-error-border: #5a2a2a;
+
+    --fl-overlay: rgb(0 0 0 / 0.55);
+    --fl-shadow-xs: 0 1px 2px rgb(0 0 0 / 0.3);
+    --fl-shadow-menu: 0 8px 24px rgb(0 0 0 / 0.45);
+    --fl-shadow-float: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px rgb(0 0 0 / 0.35);
+
+    --fl-wave: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1176 160' preserveAspectRatio='none'%3E%3Cpath d='M0 0H1176V96C1010 132 880 70 700 92S330 150 0 110Z' fill='%2310172B'/%3E%3Cpath d='M0 0H1176V52C1030 80 900 30 720 48S340 96 0 62Z' fill='%2316224A'/%3E%3Cpath d='M0 110C330 150 520 70 700 92S1010 132 1176 96' fill='none' stroke='%235A80FA' stroke-width='1.5' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+}
+
+/* Logo real: versión de color en claro y blanca en oscuro. */
+.fl-logo-dark {
+    display: none !important;
+}
+.dark-mode .fl-logo-light {
+    display: none !important;
+}
+.dark-mode .fl-logo-dark {
+    display: block !important;
+}
+
+@keyframes fl-flow-down {
+    to {
+        background-position: 0 20px;
+    }
+}
+@keyframes fl-current {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(340%);
+    }
+}
+@keyframes fl-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgb(31 75 216 / 0.32);
+    }
+    70%,
+    100% {
+        box-shadow: 0 0 0 7px rgb(31 75 216 / 0);
+    }
+}
+
+/* Hilo de actividad en curso: trazos azules que fluyen (usar con animate-flow-down). */
+@utility bg-flow-dashes {
+    background-image: repeating-linear-gradient(180deg, var(--color-fg-brand-primary) 0 4px, transparent 4px 10px);
+    background-size: 2px 20px;
+}
+
+/* Hilo de un paso pendiente: puntos grises. */
+@utility bg-flow-dots {
+    background-image: repeating-linear-gradient(180deg, var(--color-border-primary) 0 2px, transparent 2px 7px);
+    background-size: 2px 7px;
+}
+
+/* Corriente horizontal del compositor cuando Flu3nce trabaja. */
+@utility bg-flow-current {
+    background-image: linear-gradient(90deg, transparent, var(--color-fg-brand-primary), transparent);
+}
+
+/* El movimiento de la corriente se apaga por completo con «reducir movimiento». */
+@media (prefers-reduced-motion: reduce) {
+    [class*="animate-flow-"] {
+        animation: none !important;
+        stroke-dashoffset: 0 !important;
+        opacity: 1 !important;
+    }
+}
+
+html,
+body {
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-font-variant-ligatures: contextual;
+    font-variant-ligatures: contextual;
+    -webkit-font-kerning: normal;
+    font-kerning: normal;
+}
+
+/* Hide the default expand arrow on Safari.  */
+details summary::-webkit-details-marker {
+    display: none;
+}
+
+/* Hide default arrows from number inputs. */
+/* Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+/* Firefox */
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+/* Hide the default clear button (X) from search inputs. */
+input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+}
+
+/* ── Microinteracciones compartidas (animaciones parejas en toda la app) ── */
+@keyframes flu-overlay-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+@keyframes flu-modal-in {
+    from { opacity: 0; transform: translateY(10px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes flu-fade-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes flu-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Feedback al presionar cualquier botón (parejo en toda la app) */
+button:not(:disabled):active {
+    filter: brightness(0.93);
+}
+
+/* Respeta a quien prefiere menos movimiento */
+@media (prefers-reduced-motion: reduce) {
+    [data-flu-anim] { animation: none !important; }
+}
+
+/* ── Tema de marca para los recorridos guiados (driver.js) ── */
+.driver-popover.flu-popover {
+    border-radius: 20px;
+    padding: 18px 18px 16px;
+    background: var(--color-bg-primary);
+    box-shadow: var(--shadow-xl);
+    font-family: var(--font-body);
+    max-width: 320px;
+}
+.driver-popover.flu-popover .driver-popover-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+.driver-popover.flu-popover .driver-popover-description {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--color-text-tertiary);
+}
+.driver-popover.flu-popover .driver-popover-progress-text {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-text-quaternary);
+}
+.driver-popover.flu-popover .driver-popover-navigation-btns button.driver-popover-next-btn {
+    background: var(--color-bg-brand-solid);
+    color: #fff;
+    text-shadow: none;
+    border: none;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 14px;
+}
+.driver-popover.flu-popover .driver-popover-navigation-btns button.driver-popover-prev-btn {
+    background: var(--color-bg-primary);
+    color: var(--color-text-secondary);
+    text-shadow: none;
+    border: 1px solid var(--color-border-primary);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 14px;
+}
+.driver-popover.flu-popover .driver-popover-arrow {
+    color: var(--color-bg-primary);
+}
+
+/*
+ * bpmn.io: se oculta el logo/atribución ("powered by bpmn.io") del editor y el
+ * viewer BPMN.
+ *
+ * ⚠ LICENCIA: quitar esta atribución NO es gratis. La licencia de bpmn-js exige
+ * mantener el logo salvo que se adquiera una licencia comercial de bpmn.io. Antes
+ * de publicar en producción hay que COMPRAR/gestionar esa licencia con bpmn.io.
+ * Ver agent/Pendientes-Diagrama-Fase2.md.
+ */
+.bjs-powered-by {
+    display: none !important;
+}
