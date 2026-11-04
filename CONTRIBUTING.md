@@ -42,17 +42,15 @@ No se hace push directo a `main`.
 
 ## Verificación en GitHub
 
-`.github/workflows/verify.yml` corre `npm run verify:production` en cada PR y en cada push a `main`. El contrato vive en un repo privado aparte, y el token automático de GitHub Actions no puede leerlo. Por eso el workflow usa el secreto **`CONTRACT_READ_TOKEN`**.
+`.github/workflows/verify.yml` ejecuta `npm run verify:production` en cada PR, push a `main` y ejecución manual de este repositorio.
 
-Para crearlo (una sola vez; lo hace quien administra el repo):
+El contrato privado se obtiene en el commit fijado por el submódulo con una clave de despliegue exclusiva de solo lectura:
 
-1. En GitHub, ve a **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**.
-2. En **Repository access**, elige **Only select repositories** y selecciona `Luis-David-Echeverria/flu3nce-contract`.
-3. En **Permissions → Repository permissions**, da **Contents: Read-only**. Metadata queda en solo lectura automáticamente.
-4. Genera el token y cópialo.
-5. En este repo, ve a **Settings → Secrets and variables → Actions → New repository secret**. Usa el nombre `CONTRACT_READ_TOKEN` y pega el token.
+- Clave pública en **flu3nce-contract → Settings → Deploy keys**, sin permiso de escritura.
+- Clave privada guardada cifrada en **Flu3nce-Frontend → Settings → Secrets and variables → Actions**, con el nombre `CONTRACT_READ_SSH_KEY`.
+- La primera descarga usa el token normal de Actions para el frontend; la segunda usa esa clave para el contrato. La credencial no se conserva en los checkouts ni llega al build.
 
-El token tiene fecha de vencimiento. Cuando venza, la verificación fallará en el paso «Traer el contrato» con el aviso correspondiente; basta con generar otro y reemplazar el secreto.
+La configuración ya está creada. Para rotarla, genera otro par, agrega su pública al contrato y sustituye el secreto del frontend; después retira la clave anterior. Nunca uses un token personal de escritura ni guardes claves en el repositorio.
 
 ## Publicar
 

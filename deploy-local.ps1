@@ -41,6 +41,15 @@ $DistPath     = Join-Path $RepoRoot "dist"
 $NginxExe     = Join-Path $NginxPath "nginx.exe"
 $HtmlPath     = Join-Path $NginxPath "html"
 
+# Impide publicar por error un checkout del repositorio anterior.
+$RepositoryUrl = (& git -C $RepoRoot remote get-url origin).Trim().TrimEnd('/') -replace '\.git$', ''
+if ($LASTEXITCODE -ne 0 -or $RepositoryUrl -ine 'https://github.com/Luis-David-Echeverria/Flu3nce-Frontend') {
+    throw 'El origen de produccion es Luis-David-Echeverria/Flu3nce-Frontend.'
+}
+$NginxPath = [IO.Path]::GetFullPath($NginxPath).TrimEnd('\')
+$NginxExe = Join-Path $NginxPath 'nginx.exe'
+$HtmlPath = Join-Path $NginxPath 'html'
+
 function Info($m) { Write-Host $m -ForegroundColor Gray }
 function Ok($m)   { Write-Host "     $m" -ForegroundColor Green }
 function Warn($m) { Write-Host "     $m" -ForegroundColor Yellow }
@@ -106,6 +115,17 @@ if (-not (Test-Path (Join-Path $DistPath "index.html"))) {
 Ok "dist/ valido"
 if (-not (Test-Path $NginxExe)) { Die "nginx.exe no encontrado en $NginxExe" }
 Ok "nginx.exe encontrado"
+
+$releaseCommit = (& git -C $RepoRoot rev-parse HEAD).Trim()
+$releaseBranch = (& git -C $RepoRoot branch --show-current).Trim()
+$releaseContract = (& git -C (Join-Path $RepoRoot 'contract') rev-parse HEAD).Trim()
+@{
+    repository = $RepositoryUrl
+    branch = $releaseBranch
+    commit = $releaseCommit
+    contract = $releaseContract
+    publishedAt = [DateTime]::UtcNow.ToString('o')
+} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $DistPath 'frontend-release.json') -Encoding UTF8
 Write-Host ""
 
 # ============================================================================
@@ -135,7 +155,7 @@ if (Test-Path $HtmlPath) {
     $ts = Get-Date -Format 'yyyyMMdd-HHmmss'
     $BackupName = "html.backup.$ts"
     $BackupPath = Join-Path $NginxPath $BackupName
-    Rename-Item -Path $HtmlPath -NewName $BackupName
+    Rename-Item -LiteralPath $HtmlPath -NewName $BackupName
     Ok "Respaldo: $BackupPath"
 } else {
     Info "     No habia html previo (primera vez)"
@@ -151,7 +171,11 @@ $backups = Get-ChildItem -Path $NginxPath -Directory -Filter "html.backup.*" -Er
     Sort-Object Name -Descending
 if ($backups.Count -gt $KeepBackups) {
     $backups | Select-Object -Skip $KeepBackups | ForEach-Object {
-        Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        $backupTarget = [IO.Path]::GetFullPath($_.FullName)
+        if (-not $backupTarget.StartsWith($NginxPath + '\', [StringComparison]::OrdinalIgnoreCase) -or $_.Name -notmatch '^html\.backup\.\d{8}-\d{6}$') {
+            throw "Respaldo fuera del destino autorizado: $backupTarget"
+        }
+        Remove-Item -LiteralPath $backupTarget -Recurse -Force -ErrorAction SilentlyContinue
         Info "     Respaldo viejo eliminado: $($_.Name)"
     }
 }
