@@ -18,7 +18,8 @@
         "verify:production": "npm run check:frontend && npm run check:contract-pin && npm run check:api-schema && npm test -- --maxWorkers=1 && npm run build && npm run check:frontend -- --dist",
         "verify:v2": "npm run verify:production",
         "preview": "vite preview --configLoader runner",
-        "gen:api": "openapi-typescript contract/openapi-v2.yaml -o src/lib/api-schema.d.ts"
+        "gen:api": "openapi-typescript contract/openapi-v2.yaml -o src/lib/api-schema.d.ts",
+        "deploy:production": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Publish-Frontend.ps1"
     },
     "dependencies": {
         "@tailwindcss/typography": "^0.5.19",

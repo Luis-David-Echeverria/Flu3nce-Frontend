@@ -1,0 +1,2 @@
+# Los tipos generados se comparan con la salida del generador en todas las plataformas.
+src/lib/api-schema.d.ts text eol=lf

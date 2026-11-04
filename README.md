@@ -84,11 +84,15 @@ Las respuestas llegan por SSE, con reconexión mediante `Last-Event-ID`. Qué mo
 
 ## Verificación en GitHub
 
-`.github/workflows/verify.yml` corre `npm run verify:production` en cada PR y en cada push a `main`. Como el contrato es privado, el workflow necesita el secreto **`CONTRACT_READ_TOKEN`**. Cómo crearlo: [CONTRIBUTING.md](CONTRIBUTING.md#verificación-en-github).
+`.github/workflows/verify.yml` corre `npm run verify:production` en cada PR y en cada push a `main`. Como el contrato es privado, el workflow necesita el secreto **`CONTRACT_READ_SSH_KEY`**. Cómo crearlo: [CONTRIBUTING.md](CONTRIBUTING.md#verificación-en-github).
 
 ## Publicación
 
+La fuente de producción y de las pruebas es **`Luis-David-Echeverria/Flu3nce-Frontend`, rama `main`**. El repositorio `Fluence` queda como historial.
+
 Lo que se sirve es `dist/`, generado con `npm run build`. Ningún comando de verificación despliega.
+
+`npm run deploy:production` es la entrada de publicación: exige este repositorio, rama `main` y una copia limpia; ejecuta `verify:production` completo y publica en Nginx solo si pasa. El despliegue guarda la procedencia en `/frontend-release.json` (repositorio, commit y pin del contrato).
 
 - `deploy-local.ps1` compila y publica `dist/` en el Nginx local de Windows, con respaldo y reinicio validado. Se ejecuta en PowerShell como administrador; `-SkipBuild` publica el `dist/` existente.
 - `scripts/Start-FluFront.ps1` solo levanta el sitio ya publicado; no compila ni despliega.
