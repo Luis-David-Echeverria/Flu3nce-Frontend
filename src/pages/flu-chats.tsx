@@ -1,10 +1,7 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ChatMarkdown } from "@/components/custom/chat-markdown";
-import { Link, useSearchParams } from "react-router";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useSearchParams } from "react-router";
 import { ConsultationDeliverableCard, type Card } from "@/components/custom/consultation-deliverable-card";
 import { CompartirModal } from "@/components/custom/compartir-modal";
-import { ConsultationQuestions } from "@/components/custom/consultation-questions";
-import { ReadableQuestionPrompt } from "@/components/custom/readable-question-prompt";
 import { ManualVersionModal } from "@/components/custom/manual-version-modal";
 import { usePageTitle } from "@/hooks/use-page-title";
 import { useAuth } from "@/hooks/use-auth";
@@ -13,6 +10,7 @@ import { useTheme } from "@/providers/theme-provider";
 import { useUploadBatches } from "@/hooks/use-upload-batches";
 import { hasCapability } from "@/lib/capabilities";
 import { useChatEvents } from "@/hooks/use-chat-events";
+import { useChatLayout } from "@/hooks/use-chat-layout";
 import { validateUploadFiles } from "@/hooks/upload-batch-manager";
 import { isMockMode } from "@/config/api-mode";
 import { createProject, getProject, listProjectsPage, type V2Project } from "@/services/v2/projects";
@@ -41,106 +39,32 @@ import {
     type ChatSession,
 } from "@/services/v2/chats";
 import { ApiServiceError, manualVersionConflicts, type ManualVersionConflict } from "@/services/v2/http";
-import { deliverableLabel } from "@/services/v2/labels";
 import { getDeliverable } from "@/services/v2/deliverables";
 import { cancelJob, getJob } from "@/services/v2/jobs";
 import { listAvailableModels, type ModelList } from "@/services/v2/models";
-import type { ConsultationMessage, GenerationIntent, Job, PermissionPending, Source } from "@/services/v2/types";
-import type { components } from "@/lib/api-schema";
+import type { ConsultationMessage, Job, Source } from "@/services/v2/types";
 import { ChatJobActivity } from "./chat-job-activity";
 import { ChatReference } from "./chat-reference";
-import { ChatDeliverableTile } from "./chat-deliverable-tile";
 import { ChatComposer } from "./chat-composer";
 import { ChatUploadBatch } from "./chat-upload-batch";
 import { ChatStreamResponse } from "./chat-stream-response";
-import { ChatActivity, ChainWorkActivity, SavedChainActivity, SavedChatActivity } from "./chat-activity";
+import { ChatActivity, ChainWorkActivity } from "./chat-activity";
 import { beginLiveTurn, reduceLiveTurn, type LiveTurn } from "./chat-stream-state";
 import { buildChatTimeline } from "./chat-timeline";
 import { collectChainBlocks } from "./chat-chain-state";
 import { activityFromJob, isTerminalJob } from "./chat-job-state";
-import { ChatPermissions } from "./chat-permissions";
-import { ChatJobDetails } from "./chat-job-details";
 import { getMemorySettings } from "@/services/v2/memories";
 import { FluMemoryPanel } from "./flu-memory-panel";
 import { FluResizeHandle } from "./flu-resize-handle";
+import { FluChatSidebar } from "./flu-chat-sidebar";
+import { FluChatMessage, type ExchangeMetadata } from "./flu-chat-message";
+import { FluCreateProjectDialog, FluMoveChatDialog } from "./flu-chat-dialogs";
+import { FluChatContext } from "./flu-chat-context";
 import { FluSourceTools } from "./flu-source-tools";
-import { FluSourcePreview, SourceTypeIcon } from "./flu-source-preview";
+import { FluSourcePreview } from "./flu-source-preview";
 import "./flu-chats.css";
-
-type ChatMessage = ConsultationMessage & { unitId?: string };
-type ChatIntent = GenerationIntent & {
-    unitId?: string;
-    newUnit?: { name: string; kind: string };
-    deliverableId?: string;
-};
-
-const ChatIcon = () => <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l-2 2v-9.5A7.5 7.5 0 0 1 10.5 4h2A7.5 7.5 0 0 1 20 11.5Z" /></svg>;
-const FolderIcon = () => <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v10a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" /></svg>;
-const ChevronIcon = () => <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m8 10 4 4 4-4" /></svg>;
-const LogoutIcon = () => <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" /><path d="M14 8l4 4-4 4M8 12h10" /></svg>;
-const ContextIcon = () => <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M15 4v16M6.5 8h5M6.5 12h5" /></svg>;
-const EditIcon = () => <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m4 20 4.5-1 10.8-10.8a2 2 0 0 0-2.8-2.8L5.7 16.2 4 20Z" /><path d="m14.8 6.2 2.8 2.8" /></svg>;
-const DeliverableTypeIcon = ({ type }: { type: Card["deliverableType"] }) => <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    {type === "diagram_as_is" ? <><circle cx="5" cy="6" r="2" /><circle cx="19" cy="12" r="2" /><circle cx="5" cy="18" r="2" /><path d="M7 6h5v6h5M7 18h5v-6" /></> : type === "presentation" ? <><rect x="3" y="4" width="18" height="12" rx="1" /><path d="M12 16v4M8 20h8M7 12l3-3 2 2 4-4" /></> : type === "diagnostic" ? <><path d="M4 19V9m5 10V5m5 14v-7m5 7v-9M3 20h18" /></> : type === "translation" ? <><path d="M3 6h12M9 3v3m4 0c-.4 5.7-3.5 9-9 11m2-7c1.5 2.5 3.5 4.3 6 5" /><path d="m15 20 3-8 3 8m-5-2h4" /></> : type === "transcription" ? <><path d="M4 10v4m4-8v12m4-15v18m4-15v12m4-8v4" /></> : type === "understanding" ? <><circle cx="12" cy="8" r="4" /><path d="M8 12v2a4 4 0 0 0 8 0v-2M9 20h6" /></> : <><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></>}
-</svg>;
-class ChatUserError extends Error {}
-
-function messageDate(value: string) {
-    return new Date(value).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" });
-}
-
-function cardTitle(card: Card): string {
-    return "title" in card && typeof card.title === "string" && card.title.trim() ? card.title : deliverableLabel(card.deliverableType);
-}
-
-function itemCount(count: number, singular: string, plural: string): string { return `${count} ${count === 1 ? singular : plural}`; }
-
-function intentDestination(intent: ChatIntent): string {
-    if (intent.intentKind === "save_context") return "Dato que quedará registrado con su procedencia";
-    if (intent.destinations?.length) return `${intent.destinations.length} destinos propuestos para ${intent.destinations.reduce((total, destination) => total + destination.deliverableTypes.length, 0)} entregables`;
-    if (intent.newUnit) return `Nombre propuesto: ${intent.newUnit.name}`;
-    if (intent.deliverableId) return "Cambio sobre el entregable indicado";
-    return "Acción sobre un entregable existente";
-}
-
-function visibleMessageText(item: ChatMessage): string {
-    const intent = item.intent as ChatIntent | undefined;
-    if (item.refs?.sourceIds?.length && item.text.startsWith("Archivo añadido a este chat.") && item.text.includes("No pude leer")) return "Archivo añadido a este chat.";
-    if (item.kind !== "intent_to_confirm" || !intent) return item.text;
-    const types = (intent.destinations?.flatMap((destination) => destination.deliverableTypes) ?? intent.deliverableTypes)
-        .map((type) => deliverableLabel(type).toLocaleLowerCase("es-MX")).join(" y ");
-    if (intent.state === "dismissed") return "Propuesta descartada.";
-    if (intent.state === "confirmed") return "Propuesta confirmada.";
-    if (intent.state === "expired") return "Esta propuesta ya venció.";
-    if (intent.intentKind === "save_context") return "Te propongo guardar este dato para tenerlo en cuenta después.";
-    if (intent.intentKind === "revise_deliverable") return "Te propongo un cambio al entregable.";
-    if (intent.intentKind === "generate" || !intent.intentKind) return `Te propongo preparar ${types || "el entregable"}.`;
-    return item.text;
-}
-
-function chatErrorForUser(error: unknown, fallback: string): string {
-    if (error instanceof ChatUserError) return error.message;
-    if (!(error instanceof ApiServiceError)) return fallback;
-    switch (error.code) {
-        case "source_duplicate": return "Este archivo ya está entre las fuentes. Revisa la lista antes de volver a subirlo.";
-        case "preview_changed": return "El contenido que se movería cambió. Revisa una vista previa nueva antes de confirmar.";
-        case "jobs_running": return "Hay una generación en curso. Podrás mover el chat cuando termine.";
-        case "intent_not_pending": return "Esta propuesta ya no está pendiente. Actualiza el chat para ver su estado actual.";
-        case "contribution_not_active": return "Ese dato ya no está vigente. Revisa el contexto y solicita una propuesta nueva.";
-        case "deliverable_busy": return "El entregable sigue generándose. La propuesta permanece pendiente; inténtalo cuando termine.";
-        case "move_name_conflict": return "Ya existe un archivo con ese nombre en el proyecto destino. Resuelve el conflicto antes de mover el chat.";
-        case "question_group_closed": return "Esa ronda ya se cerró. Actualiza el chat para ver las preguntas vigentes.";
-        case "consultation_disabled": return "El chat todavía no está habilitado para esta cuenta.";
-        case "provider_unavailable": return "El servicio de conversación no está disponible en este momento. Inténtalo de nuevo más tarde.";
-        case "source_not_permitted": return error.message?.trim() || "Una fuente necesita permiso para el proveedor indicado. Revisa los permisos del archivo y vuelve a intentarlo.";
-        case "model_not_available": return "El modelo elegido dejó de estar disponible. Selecciona uno de los modelos habilitados y vuelve a pedirlo; no se cambió de modelo a escondidas.";
-        case "job_not_pausable": return "Este trabajo ya no se puede pausar. Actualiza su estado.";
-        case "job_not_resumable": return "Este trabajo ya no se puede reanudar. Actualiza su estado.";
-        case "job_control_via_parent": return "Controla el paquete completo desde su trabajo principal.";
-        case "internal_error": return fallback;
-        default: return error.message?.trim() || fallback;
-    }
-}
+import { ChatIcon, ContextIcon, EditIcon, FolderIcon } from "./flu-chats-icons";
+import { ChatUserError, cardTitle, chatErrorForUser, type ChatMessage } from "./flu-chats-helpers";
 
 /** Interfaz conversacional sobre el contrato real /chats. */
 export const FluChatsPage = () => {
@@ -149,6 +73,7 @@ export const FluChatsPage = () => {
     const { user } = useAuthContext();
     const { theme, setTheme } = useTheme();
     const [params, setParams] = useSearchParams();
+    const { navOpen, setNavOpen, contextOpen, setContextOpen, navWidth, setNavWidth, setContextWidth, setPanelWidth, panelMaximized, setPanelMaximized, viewportWidth, maxContextWidth, visibleContextWidth, maxPanelWidth, visiblePanelWidth } = useChatLayout();
     const projectId = params.get("project") ?? "";
     const chatId = params.get("chat") ?? "";
     const directoryOpen = params.get("view") === "all";
@@ -178,7 +103,7 @@ export const FluChatsPage = () => {
     const [stoppedJobs, setStoppedJobs] = useState<Set<string>>(() => new Set());
     const [verifiedJobs, setVerifiedJobs] = useState<Record<string, Job>>({});
     const [announcedJobs, setAnnouncedJobs] = useState<Set<string>>(() => new Set());
-    const [exchangeMetadata, setExchangeMetadata] = useState<Record<string, { requestId?: string; failure?: components["schemas"]["TurnFailure"]; permissionsPending?: PermissionPending[] }>>({});
+    const [exchangeMetadata, setExchangeMetadata] = useState<Record<string, ExchangeMetadata>>({});
     const [referencePreference, setReferencePreference] = useState<{ userId: string; enabled: boolean } | null>(null);
     const showReferences = !!user?.userId && referencePreference?.userId === user.userId && referencePreference.enabled;
     useEffect(() => {
@@ -203,9 +128,6 @@ export const FluChatsPage = () => {
     const [unreadChats, setUnreadChats] = useState<Set<string>>(() => new Set());
     const [chatSearch, setChatSearch] = useState("");
     const [expandedProjectId, setExpandedProjectId] = useState<string | null>(projectId || null);
-    const [navOpen, setNavOpen] = useState(() => window.innerWidth > 760);
-    const [contextOpen, setContextOpen] = useState(false);
-    const previousViewportWidth = useRef(window.innerWidth);
     const [openLibrarySignal, setOpenLibrarySignal] = useState(0);
     const [busy, setBusy] = useState(false);
     const [activity, setActivity] = useState<string | null>(null);
@@ -228,11 +150,6 @@ export const FluChatsPage = () => {
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const [renamingChat, setRenamingChat] = useState(false);
     const [chatTitleDraft, setChatTitleDraft] = useState("");
-    const [navWidth, setNavWidth] = useState(274);
-    const [contextWidth, setContextWidth] = useState(330);
-    const [panelWidth, setPanelWidth] = useState(550);
-    const [panelMaximized, setPanelMaximized] = useState(false);
-    const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
     const [memoryAvailable, setMemoryAvailable] = useState(false);
     const sourceInput = useRef<HTMLInputElement>(null);
     const navOpenButton = useRef<HTMLButtonElement>(null);
@@ -258,10 +175,6 @@ export const FluChatsPage = () => {
     const selectedProject = projects.find((project) => project.id === projectId);
     const accountName = user?.displayName?.trim() || user?.userId || "Usuario";
     const accountInitial = Array.from(accountName)[0]?.toLocaleUpperCase("es-MX") || "U";
-    const maxContextWidth = viewportWidth <= 1200 ? Math.floor(viewportWidth * .85) : Math.max(280, viewportWidth - (navOpen ? navWidth : 0) - 320);
-    const visibleContextWidth = Math.min(contextWidth, maxContextWidth);
-    const maxPanelWidth = viewportWidth <= 940 ? viewportWidth : Math.max(360, viewportWidth - (navOpen ? navWidth : 0) - 320);
-    const visiblePanelWidth = Math.min(panelWidth, maxPanelWidth);
     const canWrite = session?.chat.access === "owner";
     const canOperate = canWrite && hasCapability(user, "chat");
     const canStartInScope = hasCapability(user, "chat") && (!projectId || (!!selectedProject && selectedProject.rol !== "lector"));
@@ -280,20 +193,6 @@ export const FluChatsPage = () => {
         }
     }, []);
     const modelStatus = !isMockMode && !modelCatalog ? { state: modelAvailability === "available" ? "loading" as const : modelAvailability, onRetry: () => { void refreshModels(); } } : undefined;
-
-    useEffect(() => {
-        const onResize = () => {
-            const width = window.innerWidth;
-            if (previousViewportWidth.current > 760 && width <= 760) {
-                setNavOpen(false);
-                setContextOpen(false);
-            }
-            previousViewportWidth.current = width;
-            setViewportWidth(width);
-        };
-        window.addEventListener("resize", onResize);
-        return () => window.removeEventListener("resize", onResize);
-    }, []);
 
     useEffect(() => {
         if (!userMenuOpen) return;
@@ -929,40 +828,48 @@ export const FluChatsPage = () => {
     const contextVisible = contextOpen && !openedDeliverable && !openedSource && !memoryOpen && !directoryOpen;
     return <main className={`flu-shell flex h-full min-h-0 min-w-0 flex-1 text-[color:var(--fl-text)] ${navOpen ? "nav-open" : "nav-closed"} ${contextVisible ? "context-open" : "context-closed"} ${chatId ? "is-conversation" : "is-welcome"} ${openedDeliverable || openedSource || memoryOpen ? "has-side-preview" : ""}`}>
         <input ref={sourceInput} type="file" multiple accept="audio/*,video/*,image/*,.txt,.pdf,.docx,.xlsx,.pptx,.webm" className="sr-only" aria-label="Seleccionar archivos para el chat" onChange={(event) => { stageFiles(event.target.files); event.currentTarget.value = ""; }} />
-        {navOpen ? <button type="button" aria-label="Cerrar navegación" className="flu-mobile-backdrop" onClick={() => setNavOpen(false)} /> : null}
-        <aside aria-label="Navegación de chats" aria-hidden={!navOpen} inert={!navOpen} className="flu-nav flex shrink-0 flex-col p-4" style={{ "--flu-nav-width": `${navWidth}px` } as CSSProperties}>
-            <div className="flu-brand"><Link to="/flu" aria-label="Flu3nce, inicio"><img className="fl-logo-light" src="/landing/img/logo-fluence.svg" alt="Flu3nce" /><img className="fl-logo-dark" src="/landing/img/logo-fluence-white.svg" alt="" aria-hidden="true" /></Link><button ref={navCloseButton} type="button" aria-label="Plegar navegación" title="Plegar navegación" onClick={() => { setNavOpen(false); window.requestAnimationFrame(() => navOpenButton.current?.focus()); }}>‹</button></div>
-            <p className="flu-label">ESPACIO DE TRABAJO</p>
-            <button type="button" onClick={() => { setParams({}); setSession(null); setFirstMessage(""); setNavOpen(window.innerWidth > 760); }} className="flu-primary rounded-xl px-3 py-2.5 text-sm font-semibold text-white">＋ Nuevo chat</button>
-            <label className="flu-search"><span aria-hidden="true">⌕</span><input aria-label="Buscar chats" value={chatSearch} onChange={(event) => setChatSearch(event.target.value)} placeholder="Buscar chats" /></label>
-            <div className="flu-nav-list mt-5 flex min-h-0 flex-1 flex-col overflow-y-auto">
-                <p className="flu-nav-heading">CHATS</p>
-                {visibleLooseChats.length ? visibleLooseChats.slice(0, 10).map((chat) => <button key={chat.id} type="button" onClick={() => { setParams({ chat: chat.id }); if (window.innerWidth <= 760) setNavOpen(false); }} className={`flu-chat-link ${chatId === chat.id ? "is-selected" : ""}`} title={unreadChats.has(chat.id) ? `${chat.title} · nueva respuesta` : chat.title}><ChatIcon /><span className="truncate">{chat.title}</span>{unreadChats.has(chat.id) ? <span className="flu-chat-unread-dot" title="Nueva respuesta de Flu3nce"><span className="sr-only">Nueva respuesta de Flu3nce</span></span> : null}</button>) : loading ? <div aria-label="Cargando chats" aria-busy="true" className="flu-chat-nav-skeleton"><div className="flu-chat-skeleton" /><div className="flu-chat-skeleton" /><div className="flu-chat-skeleton" /></div> : <p className="flu-nav-empty">{chatSearch ? "Sin coincidencias." : "Aún no hay chats aquí."}</p>}
-                <button type="button" onClick={() => setParams({ view: "all" })} className="flu-more">Ver todos los chats</button>
-                <div className="flu-project-heading-row"><p className="flu-nav-heading with-space">PROYECTOS</p><button type="button" onClick={openProjectCreation} aria-label="Crear proyecto" title="Crear proyecto">＋</button></div>
-                {sidebarProjects.map((project) => {
-                    const expanded = expandedProjectId === project.id;
-                    return <div key={project.id} className="flu-project-group"><div className={`flu-project-row ${projectId === project.id ? "flu-project-selected" : ""}`}><button type="button" aria-expanded={expanded} aria-controls={`project-chats-${project.id}`} onClick={() => { if (expanded) setExpandedProjectId(null); else if (projectId === project.id) setExpandedProjectId(project.id); else openProject(project.id); }} className="flu-project-toggle min-w-0 flex-1 rounded-lg px-2 py-2 text-left text-sm" title={project.name}><ChevronIcon /><FolderIcon /><span className="truncate">{project.name}</span></button>{project.rol !== "lector" ? <button type="button" aria-label={`Nuevo chat en ${project.name}`} title={`Nuevo chat en ${project.name}`} onClick={() => { setExpandedProjectId(project.id); setParams({ project: project.id }); setSession(null); setFirstMessage(""); if (window.innerWidth <= 760) setNavOpen(false); }} className="flu-project-new">＋</button> : null}</div>{expanded && projectId === project.id ? <div id={`project-chats-${project.id}`} className="flu-project-chats">{visibleProjectChats.length ? visibleProjectChats.slice(0, 10).map((chat) => <button key={chat.id} type="button" onClick={() => { setParams({ project: project.id, chat: chat.id }); if (window.innerWidth <= 760) setNavOpen(false); }} className={`flu-chat-link ${chatId === chat.id ? "is-selected" : ""}`} title={unreadChats.has(chat.id) ? `${chat.title} · nueva respuesta` : chat.title}><ChatIcon /><span className="truncate">{chat.title}{chat.shared ? " · compartido" : ""}</span>{unreadChats.has(chat.id) ? <span className="flu-chat-unread-dot" title="Nueva respuesta de Flu3nce"><span className="sr-only">Nueva respuesta de Flu3nce</span></span> : null}</button>) : <p className="flu-nav-empty">{loading ? "Cargando…" : "Aún no hay chats aquí."}</p>}{visibleProjectChats.length > 10 || chatsCursor ? <button type="button" onClick={() => setParams({ view: "all", project: project.id })} className="flu-more">Ver todos los chats</button> : null}</div> : null}</div>;
-                })}
-                <button type="button" onClick={() => setParams({ view: "all" })} className="flu-more">Ver todos los proyectos</button>
-            </div>
-            <div className="flu-account-area">
-                <button ref={accountButton} type="button" className="flu-account-avatar" aria-label={`Abrir cuenta de ${accountName}`} aria-expanded={userMenuOpen} aria-controls="flu-account-menu" title={accountName} onClick={() => setUserMenuOpen((value) => !value)}>{accountInitial}</button>
-                {userMenuOpen ? <div ref={userMenu} id="flu-account-menu" role="menu" aria-label="Cuenta" className="flu-account-menu">
-                    <div className="flu-account-identity"><strong>{accountName}</strong>{user?.email ? <span>{user.email}</span> : null}</div>
-                    <div className="flu-account-theme" role="group" aria-label="Apariencia">
-                        <span>Apariencia</span>
-                        <div className="flu-account-theme-options">
-                            {([ ["light", "Claro"], ["dark", "Oscuro"], ["system", "Sistema"] ] as const).map(([value, label]) => <button key={value} type="button" role="menuitemradio" aria-checked={theme === value} onClick={() => setTheme(value)}>{label}</button>)}
-                        </div>
-                    </div>
-                    <button type="button" role="menuitem" disabled={!memoryAvailable} onClick={() => { setUserMenuOpen(false); closePreview(); setMemoryOpen(true); if (viewportWidth <= 760) setNavOpen(false); }}><span aria-hidden="true">⚙</span> Memoria</button>
-                    <button type="button" role="menuitemcheckbox" aria-checked={showReferences} onClick={toggleReferences}>Mostrar IDs de prueba {showReferences ? "✓" : ""}</button>
-                    <button type="button" role="menuitem" onClick={() => void logout()}><LogoutIcon /> Cerrar sesión</button>
-                </div> : null}
-            </div>
-            <FluResizeHandle label="Ajustar ancho de navegación" value={navWidth} min={220} max={480} direction={1} onChange={setNavWidth} />
-        </aside>
+        <FluChatSidebar
+            navOpen={navOpen}
+            navWidth={navWidth}
+            onNavWidthChange={setNavWidth}
+            onCloseBackdrop={() => setNavOpen(false)}
+            onCollapse={() => { setNavOpen(false); window.requestAnimationFrame(() => navOpenButton.current?.focus()); }}
+            closeButtonRef={navCloseButton}
+            onNewChat={() => { setParams({}); setSession(null); setFirstMessage(""); setNavOpen(window.innerWidth > 760); }}
+            chatSearch={chatSearch}
+            onChatSearch={setChatSearch}
+            chatId={chatId}
+            projectId={projectId}
+            looseChats={visibleLooseChats}
+            loading={loading}
+            unreadChats={unreadChats}
+            onOpenChat={(chat, chatProjectId) => { setParams(chatProjectId ? { project: chatProjectId, chat: chat.id } : { chat: chat.id }); if (window.innerWidth <= 760) setNavOpen(false); }}
+            onViewAll={(viewProjectId) => setParams(viewProjectId ? { view: "all", project: viewProjectId } : { view: "all" })}
+            projects={sidebarProjects}
+            projectChats={visibleProjectChats}
+            hasMoreProjectChats={!!chatsCursor}
+            expandedProjectId={expandedProjectId}
+            onExpandProject={setExpandedProjectId}
+            onOpenProject={openProject}
+            onNewChatInProject={(newProjectId) => { setExpandedProjectId(newProjectId); setParams({ project: newProjectId }); setSession(null); setFirstMessage(""); if (window.innerWidth <= 760) setNavOpen(false); }}
+            onCreateProject={openProjectCreation}
+            account={{
+                name: accountName,
+                initial: accountInitial,
+                email: user?.email,
+                menuOpen: userMenuOpen,
+                onToggleMenu: () => setUserMenuOpen((value) => !value),
+                buttonRef: accountButton,
+                menuRef: userMenu,
+                theme,
+                onTheme: setTheme,
+                memoryAvailable,
+                onOpenMemory: () => { setUserMenuOpen(false); closePreview(); setMemoryOpen(true); if (viewportWidth <= 760) setNavOpen(false); },
+                showReferences,
+                onToggleReferences: toggleReferences,
+                onLogout: () => void logout(),
+            }}
+        />
 
         <section className="flu-main flex min-h-0 min-w-0 flex-1 flex-col" onDragEnter={(event) => { if (event.dataTransfer.types.includes("Files") && !directoryOpen) { event.preventDefault(); dragDepth.current++; setDraggingFiles(true); } }} onDragOver={(event) => { if (event.dataTransfer.types.includes("Files") && !directoryOpen) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }} onDragLeave={(event) => { if (event.dataTransfer.types.includes("Files")) { dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDraggingFiles(false); } }} onDrop={(event) => { if (!directoryOpen && event.dataTransfer.files.length) { event.preventDefault(); stageFiles(event.dataTransfer.files); } dragDepth.current = 0; setDraggingFiles(false); }}>
             {draggingFiles ? <div className="flu-chat-drop-overlay" aria-hidden="true">Suelta los archivos para añadirlos a la bandeja</div> : null}
@@ -1004,53 +911,29 @@ export const FluChatsPage = () => {
                             if (entry.type === "chain_activity") return <ChainWorkActivity key={`${entry.activity.requestId}:${entry.activity.id}`} activity={stoppedJobs.has(entry.activity.jobId ?? "") ? { ...entry.activity, state: "cancelled" } : entry.activity} connection={chatEvents.connection} />;
                             if (entry.type === "job") return <ChatJobActivity key={`job-${entry.jobId}`} jobId={entry.jobId} chatId={chatId} messages={entry.messages} projectId={session.chat.projectId} canOperate={canOperate && messages.indexOf(entry.messages[entry.messages.length - 1]) > lastUserMessageIndex} activities={jobActivities.filter((item) => item.jobId === entry.jobId)} connection={chatEvents.connection} stopped={stoppedJobs.has(entry.jobId)} verifiedJob={verifiedJobs[entry.jobId]} showReferences={showReferences} renderCards={false} busy={busy} onRetry={(intentId) => confirm(intentId)} onOpenDeliverable={openDeliverable} />;
                             const item = entry.message;
-                            const activityGroup = !item.chainBlock ? item.parts?.find((part) => part.kind === "activity_group")?.activityGroup : undefined;
-                            const actionsCurrent = messages.findIndex((message) => message.id === item.id) > lastUserMessageIndex;
-                            const metadata = exchangeMetadata[item.id];
-                            const displayText = item.intent?.state === "pending" && !actionsCurrent ? "Esta propuesta ya venció." : visibleMessageText(item);
-                            const intent = item.intent as ChatIntent | undefined;
-                            const revision = intent?.revisionProposal;
-                            const revises = intent?.intentKind === "revise_deliverable";
-                            const saves = intent?.intentKind === "save_context";
-                            const supported = !!intent && [undefined, "generate", "save_context", "revise_deliverable"].includes(intent.intentKind) && (!revises || hasCapability(user, "revisions"));
-                            const ready = saves ? !!intent?.contextProposal?.text : revises
-                                ? !!intent?.unitId && !!intent?.deliverableId && !!revision && (revision.executionScope === "targeted_change" ? !!revision.preview?.trim() : revision.executionScope === "full_regeneration" && !revision.preview)
-                                : !!intent && (intent.destinations?.length ? intent.destinations.every((destination) => destination.deliverableTypes.length > 0 && !!(destination.unitId || destination.newUnit)) : !!(intent.unitId || intent.newUnit));
-                            return <article key={item.id} aria-label={`${item.role === "user" ? "Tu mensaje" : item.role === "system" ? "Mensaje del sistema" : "Respuesta de Flu3nce"}, ${messageDate(item.createdAt)}`} className={`flu-message min-w-0 rounded-2xl px-4 py-3 text-sm leading-6 ${item.role === "user" ? "ml-auto flu-user" : "flu-assistant"}`}>
-                                {item.parts?.some((part) => part.kind !== "activity_group") ? <div className="flu-message-parts">{item.parts.map((part, index) => {
-                                    if (part.kind === "text" && part.text) return <Suspense key={index} fallback={<p className="whitespace-pre-wrap break-words">{part.text}</p>}><ReadableQuestionPrompt prompt={part.text} /></Suspense>;
-                                    if (part.kind === "table" && part.table) return <div key={index} className="overflow-x-auto"><table className="flu-message-part-table"><thead><tr>{part.table.columns.map((column, cell) => <th key={cell} scope="col">{column}</th>)}</tr></thead><tbody>{part.table.rows.map((row, rowIndex) => <tr key={rowIndex}>{part.table!.columns.map((_, cell) => <td key={cell}>{row[cell] ?? ""}</td>)}</tr>)}</tbody></table>{part.table.calculated ? <small>Los valores marcados «calculado» fueron calculados por Flu3nce.</small> : null}</div>;
-                                    if (part.kind === "deliverable_card" && part.deliverableCard) return <ChatDeliverableTile key={index} card={part.deliverableCard} onOpen={() => openPartDeliverable(part.deliverableCard!)} />;
-                                    if (part.kind === "question" && part.clarification) return <Suspense key={index} fallback={<p>{part.clarification.prompt}</p>}><ReadableQuestionPrompt prompt={part.clarification.prompt} /></Suspense>;
-                                    return null;
-                                })}</div> : <Suspense fallback={<p className="whitespace-pre-wrap break-words">{displayText}</p>}><ReadableQuestionPrompt prompt={displayText} /></Suspense>}
-                                {chatEvents.explanations[item.id] && chatEvents.explanations[item.id] !== displayText ? <ChatMarkdown text={chatEvents.explanations[item.id]} /> : null}
-                                {item.role === "flu" && item.modelUsed ? <small className="flu-message-model">Modelo usado: {item.modelUsed}</small> : null}
-                                {item.refs?.sourceIds?.length ? <div className="flu-message-sources">{item.refs.sourceIds.map((sourceId) => { const source = sources.find((candidate) => candidate.id === sourceId); return source ? <button key={sourceId} type="button" onClick={() => openSource(source)} className="flu-message-source-card" aria-label={`Ver archivo original ${source.name}`}><SourceTypeIcon source={source} /><span>{source.name}</span><small>{source.status === "processing" ? "Procesando para Flu3nce · original disponible" : source.status === "failed" ? "No se pudo leer para Flu3nce · original disponible" : "Ver archivo original"}</small></button> : null; })}</div> : null}
-                                {item.refs?.sourceIds?.length && item.failure ? <p className="flu-source-extraction-note">Flu3nce aún no puede usar el contenido de este archivo. Puedes abrir el original desde la tarjeta.</p> : null}
-                                {item.generationStatus ? <p className="flu-chat-status mt-2 rounded-lg bg-[color:var(--fl-primary-subtle)] px-3 py-2 text-xs text-[color:var(--fl-link)]">{item.generationStatus.stepLabel}</p> : null}
-                                {actionsCurrent && item.clarification?.suggestions?.length ? <div className="flu-chat-suggestions mt-3 flex flex-wrap gap-2">{item.clarification.suggestions.map((suggestion) => <button key={suggestion} type="button" disabled={busy || !canOperate || !session.freeMessagesEnabled} onClick={() => sendText(suggestion)} className="rounded-lg border border-[color:var(--fl-border)] bg-[color:var(--fl-bg)] px-3 py-1.5 text-xs font-semibold text-[color:var(--fl-link)] disabled:opacity-50">{suggestion}</button>)}</div> : null}
-                                {item.answers?.answers.length ? <ul className="flu-chat-answers mt-2 space-y-1 rounded-lg bg-[color:var(--fl-surface-2)] p-3 text-xs text-[color:var(--fl-text-3)]">{item.answers.answers.map((answer) => <li key={answer.questionId}>{answer.display ?? String(answer.value)}</li>)}</ul> : null}
-                                {actionsCurrent && item.questionGroup?.state === "open" && canOperate ? <ConsultationQuestions group={item.questionGroup} projectId={session.chat.projectId} onAnswer={async (answers) => { await answerChatQuestionGroup(chatId, item.questionGroup!.id, answers); await refreshChat(); }} /> : null}
-                                {item.deliverableCard && !item.parts?.some((part) => part.kind === "deliverable_card") ? item.chainBlock ? <ChatDeliverableTile card={item.deliverableCard} onOpen={() => openPartDeliverable(item.deliverableCard!)} /> : (item as ChatMessage).unitId ? <ConsultationDeliverableCard card={item.deliverableCard} projectId={session.chat.projectId} unitId={(item as ChatMessage).unitId!} onOpenPanel={() => openDeliverable(item.deliverableCard!, (item as ChatMessage).unitId!)} /> : <ChatDeliverableTile card={item.deliverableCard} onOpen={() => openPartDeliverable(item.deliverableCard!)} /> : null}
-                                {metadata?.failure && !item.failure && metadata.failure.message !== displayText ? <p className="flu-chat-failure" role="alert">{metadata.failure.message}</p> : null}
-                                {metadata?.permissionsPending?.length || metadata?.failure?.action?.kind === "grant_permission" ? <ChatPermissions pending={metadata.permissionsPending} action={metadata.failure?.action} projectId={session.chat.projectId} canWrite={canOperate} /> : null}
-                                {item.chainBlock?.jobId && verifiedJobs[item.chainBlock.jobId] ? <ChatJobDetails job={verifiedJobs[item.chainBlock.jobId]} projectId={session.chat.projectId} canWrite={canOperate} /> : null}
-                                {item.failure && !item.refs?.sourceIds?.length ? <div className="flu-chat-failure mt-2 rounded-lg border border-[color:var(--fl-error-border)] bg-[color:var(--fl-error-bg)] px-3 py-2 text-xs text-[color:var(--fl-error-text)]"><p>{item.failure.message}</p>{actionsCurrent && item.failure.safeAction === "retry" && item.failure.retryIntentId && canOperate ? <button type="button" disabled={busy} onClick={() => confirm(item.failure!.retryIntentId!)} className="mt-2 rounded-lg border border-[color:var(--fl-error-border)] bg-[color:var(--fl-bg)] px-3 py-1.5 font-semibold">Confirmar reintento</button> : null}</div> : null}
-                                {actionsCurrent && intent?.state === "pending" ? <div className="flu-chat-proposal mt-3 rounded-xl border border-[color:var(--fl-border)] bg-[color:var(--fl-surface-2)] p-3 text-xs">
-                                    <p className="font-bold text-[color:var(--fl-text)]">Acción propuesta · todavía no ejecutada</p>
-                                    <p className="mt-1">{intentDestination(intent)}</p>
-                                    {intent.destinations?.length ? <ul className="mt-2 space-y-1">{intent.destinations.map((destination, index) => <li key={`${destination.unitId ?? destination.newUnit?.name ?? "destino"}-${index}`} className="rounded-lg bg-[color:var(--fl-bg)] px-2 py-1.5">{destination.deliverableTypes.map(deliverableLabel).join(", ")} · {destination.newUnit?.name ?? "Destino existente"}</li>)}</ul> : intent.deliverableTypes.length ? <p className="mt-1">Entregables: {intent.deliverableTypes.map(deliverableLabel).join(", ")}</p> : null}
-                                    {intent.deliverableId ? <p className="mt-1">Solo se cambiará el entregable seleccionado.</p> : null}
-                                    {saves && intent.contextProposal ? <p className="mt-2 rounded-lg bg-[color:var(--fl-bg)] p-2 whitespace-pre-wrap">Dato a guardar: {intent.contextProposal.text}</p> : null}
-                                    {revision ? <div className="mt-2 rounded-lg bg-[color:var(--fl-bg)] p-2"><p>{revision.executionScope === "targeted_change" ? "Cambio puntual" : "Regeneración completa"}: {revision.changeSummary}</p>{revision.executionScope === "targeted_change" && revision.preview ? <pre className="mt-2 whitespace-pre-wrap break-words font-sans">Vista previa exacta: {revision.preview}</pre> : null}</div> : null}
-                                    {!supported ? <p className="mt-2 text-[color:var(--fl-warning-text)]">Esta versión aún no puede confirmar este tipo de intención.</p> : !ready ? <p className="mt-2 text-[color:var(--fl-error-text)]">La propuesta no identifica todo lo necesario para confirmarla de forma segura.</p> : null}
-                                    {supported && canOperate ? <div className="mt-3 flex gap-2"><button type="button" disabled={busy || !ready} onClick={() => confirm(intent.id)} className="rounded-lg bg-[color:var(--fl-primary)] px-3 py-2 font-semibold text-white disabled:opacity-50">{saves ? "Guardar dato" : revises ? "Confirmar revisión" : "Confirmar generación"}</button><button type="button" disabled={busy} onClick={() => dismiss(intent.id)} className="rounded-lg border border-[color:var(--fl-border)] px-3 py-2">Descartar</button></div> : null}
-                                </div> : null}
-                                {activityGroup ? <SavedChatActivity group={activityGroup} title={activityGroup.jobId && item.deliverableCard?.version ? `Ya puedes consultar ${deliverableLabel(item.deliverableCard.deliverableType).toLocaleLowerCase("es-MX")}` : undefined} /> : null}
-                                {item.chainBlock?.final ? <SavedChainActivity block={item.chainBlock} /> : null}
-                                    {showReferences ? <ChatReference chatId={chatId} messageId={item.id} requestId={item.chainBlock?.requestId ?? metadata?.requestId} /> : null}
-                            </article>;
+                            return <FluChatMessage
+                                key={item.id}
+                                item={item}
+                                chatId={chatId}
+                                projectId={session.chat.projectId}
+                                actionsCurrent={messages.findIndex((message) => message.id === item.id) > lastUserMessageIndex}
+                                metadata={exchangeMetadata[item.id]}
+                                explanation={chatEvents.explanations[item.id]}
+                                sources={sources}
+                                freeMessagesEnabled={!!session.freeMessagesEnabled}
+                                canOperate={canOperate}
+                                canRevise={hasCapability(user, "revisions")}
+                                busy={busy}
+                                verifiedJob={item.chainBlock?.jobId ? verifiedJobs[item.chainBlock.jobId] : undefined}
+                                showReferences={showReferences}
+                                onOpenSource={openSource}
+                                onOpenDeliverable={openDeliverable}
+                                onOpenPartDeliverable={openPartDeliverable}
+                                onSendText={sendText}
+                                onConfirm={(intentId) => confirm(intentId)}
+                                onDismiss={dismiss}
+                                onAnswerQuestionGroup={async (groupId, answers) => { await answerChatQuestionGroup(chatId, groupId, answers); await refreshChat(); }}
+                            />;
                         })}
 
                         {orphanJobActivities.length ? <ChatActivity items={orphanJobActivities.map((item) => {
@@ -1067,42 +950,57 @@ export const FluChatsPage = () => {
             </> : <div aria-label="Cargando chat" aria-busy="true" className="flu-chat-loading flex-1 px-4 py-8 sm:px-8"><div className="mx-auto max-w-3xl space-y-5"><div className="flu-chat-skeleton ml-auto h-12 w-1/2 rounded-2xl" /><div className="flu-chat-skeleton h-20 w-3/4 rounded-2xl" /><div className="flu-chat-skeleton ml-auto h-12 w-2/3 rounded-2xl" /><span className="sr-only">Cargando conversación…</span></div></div>}
         </section>
 
-        <aside id="flu-context" aria-label="Contexto del chat" aria-hidden={!contextVisible} inert={!contextVisible} className="flu-context shrink-0 p-5" style={{ "--flu-context-width": `${visibleContextWidth}px` } as CSSProperties}>
-            {contextVisible ? <FluResizeHandle label="Ajustar ancho del contexto" value={visibleContextWidth} min={Math.min(280, maxContextWidth)} max={maxContextWidth} direction={-1} onChange={setContextWidth} /> : null}
-            <div className="flu-context-scroll"><div className="flu-context-heading"><div><p className="flu-label">CONTEXTO DEL CHAT</p><h2>{session?.chat.unassigned || !projectId ? "Este chat" : selectedProject?.name ?? "Proyecto"}</h2></div><button type="button" aria-label="Plegar contexto" onClick={() => setContextOpen(false)}>›</button></div>
-            <section className="flu-context-section"><div className="flex items-center justify-between"><h3>Fuentes</h3><span>{sources.length}{sourcesCursor ? "+" : ""}</span></div>{sourcesError ? <p role="alert" className="mt-2 text-xs text-[color:var(--fl-error-text)]">{sourcesError}</p> : null}{sources.length ? orderedSources.map((source) => <button key={source.id} type="button" onClick={() => openSource(source)} className="flu-context-item flu-context-source" title={`Ver archivo original ${source.name}`}><SourceTypeIcon source={source} /><span className="min-w-0"><span className="block truncate">{source.name}</span>{source.status === "processing" ? <span className="block text-[10px] text-[color:var(--fl-warning-text)]">Procesando contenido…</span> : source.status === "failed" ? <span className="block text-[10px] text-[color:var(--fl-error-text)]">No se pudo procesar el contenido</span> : null}</span></button>) : <p className="flu-context-empty">Todavía no hay fuentes añadidas.</p>}{sourcesCursor ? <button type="button" disabled={busy} onClick={() => void run(async () => { const page = await listChatSources(chatId, sourcesCursor); setSources((current) => [...current, ...page.sources.filter((next) => !current.some((item) => item.id === next.id))]); setSourcesCursor(page.nextCursor); }, "No se pudieron cargar más fuentes.")} className="flu-context-action">Ver más fuentes</button> : null}</section>
-            {session && !isMockMode ? <FluSourceTools chatId={session.chat.id} projectId={session.chat.projectId} unassigned={session.chat.unassigned} canWrite={canWrite && (!selectedProject || selectedProject.rol !== "lector")} sources={orderedSources} openLibrarySignal={openLibrarySignal} onSourcesChanged={async () => { const page = await listChatSources(session.chat.id); setSources(page.sources); setSourcesCursor(page.nextCursor); await refreshChat(); }} /> : null}
-            <section className="flu-context-section"><div className="flex items-center justify-between"><h3>Entregables</h3><span>{visibleDeliverables.length}</span></div>{visibleDeliverables.length ? visibleDeliverables.map((item) => item.unitId ? <button key={item.id} type="button" onClick={() => openDeliverable(item.deliverableCard!, item.unitId!)} className="flu-context-item flu-context-deliverable" aria-label={`Ver ${deliverableLabel(item.deliverableCard!.deliverableType)}, versión ${item.deliverableCard!.version?.number ?? "en curso"}`}><span className="flu-context-deliverable-icon"><DeliverableTypeIcon type={item.deliverableCard!.deliverableType} /></span><span className="flu-context-deliverable-title">{cardTitle(item.deliverableCard!)} · versión {item.deliverableCard!.version?.number ?? "en curso"}</span><span aria-hidden="true">→</span></button> : null) : <p className="flu-context-empty">Todavía no hay entregables. Puedes pedir el primero en el chat.</p>}</section>
-            {session?.chat.unassigned && canWrite ? <button type="button" onClick={() => { setMoveOpen(true); setMovePreview(null); }} className="flu-context-action mt-5">Mover a proyecto</button> : null}
-            {session && !session.chat.unassigned && canWrite ? <button type="button" disabled={busy || !canOperate} onClick={() => void run(async () => { const chat = await updateChat(chatId, { shared: !session.chat.shared }); setSession((current) => current ? { ...current, chat } : current); await refreshList(); }, "No se pudo cambiar la visibilidad.")} className="flu-context-action mt-5">{session.chat.shared ? "Volver privado" : "Compartir con el proyecto (solo lectura)"}</button> : null}
-            {session && !session.chat.unassigned && selectedProject?.rol === "propietario" ? <button type="button" disabled={!canOperate} onClick={() => setMembersOpen(true)} className="flu-context-action mt-2">Gestionar miembros del proyecto</button> : null}
-            </div>
-        </aside>
+        <FluChatContext
+            visible={contextVisible}
+            width={visibleContextWidth}
+            maxWidth={maxContextWidth}
+            onWidthChange={setContextWidth}
+            title={session?.chat.unassigned || !projectId ? "Este chat" : selectedProject?.name ?? "Proyecto"}
+            onCollapse={() => setContextOpen(false)}
+            sources={sources}
+            orderedSources={orderedSources}
+            hasMoreSources={!!sourcesCursor}
+            sourcesError={sourcesError}
+            onOpenSource={openSource}
+            onLoadMoreSources={() => void run(async () => { const page = await listChatSources(chatId, sourcesCursor); setSources((current) => [...current, ...page.sources.filter((next) => !current.some((item) => item.id === next.id))]); setSourcesCursor(page.nextCursor); }, "No se pudieron cargar más fuentes.")}
+            sourceTools={session && !isMockMode ? <FluSourceTools chatId={session.chat.id} projectId={session.chat.projectId} unassigned={session.chat.unassigned} canWrite={canWrite && (!selectedProject || selectedProject.rol !== "lector")} sources={orderedSources} openLibrarySignal={openLibrarySignal} onSourcesChanged={async () => { const page = await listChatSources(session.chat.id); setSources(page.sources); setSourcesCursor(page.nextCursor); await refreshChat(); }} /> : null}
+            deliverables={visibleDeliverables}
+            onOpenDeliverable={openDeliverable}
+            busy={busy}
+            actions={<>
+                {session?.chat.unassigned && canWrite ? <button type="button" onClick={() => { setMoveOpen(true); setMovePreview(null); }} className="flu-context-action mt-5">Mover a proyecto</button> : null}
+                {session && !session.chat.unassigned && canWrite ? <button type="button" disabled={busy || !canOperate} onClick={() => void run(async () => { const chat = await updateChat(chatId, { shared: !session.chat.shared }); setSession((current) => current ? { ...current, chat } : current); await refreshList(); }, "No se pudo cambiar la visibilidad.")} className="flu-context-action mt-5">{session.chat.shared ? "Volver privado" : "Compartir con el proyecto (solo lectura)"}</button> : null}
+                {session && !session.chat.unassigned && selectedProject?.rol === "propietario" ? <button type="button" disabled={!canOperate} onClick={() => setMembersOpen(true)} className="flu-context-action mt-2">Gestionar miembros del proyecto</button> : null}
+            </>}
+        />
         {(openedDeliverable || openedSource) && session ? <aside ref={deliverablePanel} aria-label={openedSource ? `Vista de ${openedSource.name}` : `Vista de ${cardTitle(openedDeliverable!.card)}`} className={`flu-deliverable-panel ${openedSource ? "is-source-panel" : ""} ${panelMaximized ? "is-maximized" : ""}`} style={{ "--flu-panel-width": `${visiblePanelWidth}px` } as CSSProperties}>
             {!panelMaximized ? <FluResizeHandle label="Ajustar ancho del panel de entregables" value={visiblePanelWidth} min={Math.min(360, maxPanelWidth)} max={maxPanelWidth} direction={-1} onChange={setPanelWidth} /> : null}
             <header className="flu-deliverable-panel-header"><div><p>{openedSource ? "ARCHIVO DEL CHAT" : "ENTREGABLE"}</p><h2 title={openedSource?.name}>{openedSource?.name ?? cardTitle(openedDeliverable!.card)}</h2></div><div className="flu-deliverable-panel-actions"><button type="button" onClick={() => setPanelMaximized((value) => !value)} aria-label={panelMaximized ? "Restaurar panel" : "Pantalla completa"} title={panelMaximized ? "Restaurar panel" : "Pantalla completa"}>{panelMaximized ? "⤢" : "⛶"}</button><button type="button" onClick={closePreview} aria-label="Cerrar panel">×</button></div></header>
             <div className="flu-deliverable-panel-content is-source-viewer">{openedSource ? <FluSourcePreview source={openedSource} projectId={session.chat.projectId} /> : openedDeliverable ? <ConsultationDeliverableCard key={`${openedDeliverable.card.deliverableId}-${openedDeliverable.card.version?.id ?? "pending"}`} card={openedDeliverable.card} projectId={session.chat.projectId} unitId={openedDeliverable.unitId} initiallyExpanded fullPreview /> : null}</div>
         </aside> : null}
-        {moveOpen ? <div className="flu-move-backdrop"><section role="dialog" aria-modal="true" aria-label="Mover chat a proyecto" className="flu-move-dialog">
-            <div className="flu-move-head"><div><p>MOVER CHAT</p><h2>Elige un proyecto</h2></div><button type="button" onClick={() => setMoveOpen(false)} aria-label="Cerrar">×</button></div>
-            <p>El chat seguirá siendo privado. Sus archivos y entregables viajarán con él.</p>
-            <select aria-label="Proyecto destino" value={moveProjectId} onChange={(event) => { setMoveProjectId(event.target.value); setMovePreview(null); }}><option value="">Elige proyecto</option>{projects.filter((item) => item.rol !== "lector").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-            {projectsCursor ? <button type="button" disabled={busy} onClick={loadMoreProjects} className="flu-directory-more">Cargar más proyectos</button> : null}
-            {movePreview ? <div className="flu-move-summary" role="status"><strong>Se moverán a {projects.find((project) => project.id === moveProjectId)?.name ?? "este proyecto"}:</strong><span>{itemCount(movePreview.messageCount, "mensaje", "mensajes")} · {itemCount(movePreview.sources.length, "archivo", "archivos")} · {itemCount(movePreview.deliverables.length, "entregable", "entregables")} · {itemCount(movePreview.contributions.length, "aporte", "aportes")}</span><small>El chat y sus versiones se mantienen; solo cambia el proyecto al que pertenecen.</small></div> : null}
-            <div className="flu-move-actions"><button type="button" onClick={() => { setMoveOpen(false); setMovePreview(null); }}>Cancelar</button>{movePreview ? <button type="button" disabled={busy} onClick={executeMove}>Confirmar movimiento</button> : <button type="button" disabled={busy || !moveProjectId} onClick={previewMove}>Continuar</button>}</div>
-        </section></div> : null}
-        {projectCreateOpen ? <div className="flu-move-backdrop"><section role="dialog" aria-modal="true" aria-label="Crear proyecto" className="flu-move-dialog flu-project-create-dialog" onKeyDown={(event) => { if (event.key === "Escape" && !busy) { event.preventDefault(); setProjectCreateOpen(false); } }}>
-            <div className="flu-move-head"><div><p>NUEVO PROYECTO</p><h2>Crear proyecto</h2></div><button type="button" onClick={() => setProjectCreateOpen(false)} disabled={busy} aria-label="Cerrar">×</button></div>
-            <p>Reúne chats relacionados sin compartir automáticamente los archivos de cada conversación.</p>
-            <form onSubmit={(event) => { event.preventDefault(); void submitProject(); }}>
-                <label htmlFor="flu-project-name">Nombre del proyecto</label>
-                <input id="flu-project-name" autoFocus required maxLength={120} value={projectNameDraft} onChange={(event) => setProjectNameDraft(event.target.value)} placeholder="Ej. Compras menores" />
-                <label htmlFor="flu-project-description">Descripción <span>(opcional)</span></label>
-                <textarea id="flu-project-description" value={projectDescriptionDraft} onChange={(event) => setProjectDescriptionDraft(event.target.value)} rows={3} placeholder="¿Qué trabajo reunirás aquí?" />
-                {projectCreateError ? <p role="alert" className="flu-project-create-error">{projectCreateError}</p> : null}
-                <div className="flu-move-actions"><button type="button" disabled={busy} onClick={() => setProjectCreateOpen(false)}>Cancelar</button><button type="submit" disabled={busy || !projectNameDraft.trim()}>{busy ? "Creando…" : "Crear proyecto"}</button></div>
-            </form>
-        </section></div> : null}
+        {moveOpen ? <FluMoveChatDialog
+            projects={projects}
+            hasMoreProjects={!!projectsCursor}
+            onLoadMoreProjects={loadMoreProjects}
+            projectId={moveProjectId}
+            onProjectChange={(nextProjectId) => { setMoveProjectId(nextProjectId); setMovePreview(null); }}
+            preview={movePreview}
+            busy={busy}
+            onClose={() => setMoveOpen(false)}
+            onCancel={() => { setMoveOpen(false); setMovePreview(null); }}
+            onPreview={previewMove}
+            onConfirm={executeMove}
+        /> : null}
+        {projectCreateOpen ? <FluCreateProjectDialog
+            name={projectNameDraft}
+            onNameChange={setProjectNameDraft}
+            description={projectDescriptionDraft}
+            onDescriptionChange={setProjectDescriptionDraft}
+            error={projectCreateError}
+            busy={busy}
+            onClose={() => setProjectCreateOpen(false)}
+            onSubmit={() => void submitProject()}
+        /> : null}
         {memoryOpen ? <FluMemoryPanel onClose={closeMemory} /> : null}
         {session && selectedProject ? <CompartirModal open={membersOpen} projectId={session.chat.projectId} projectName={selectedProject.name} miRol={selectedProject.rol} onClose={() => setMembersOpen(false)} /> : null}
         {manualConfirmation ? <ManualVersionModal conflicts={manualConfirmation.conflicts} busy={busy} onCancel={() => setManualConfirmation(null)} onConfirm={() => confirm(manualConfirmation.intentId, true)} /> : null}
