@@ -122,6 +122,17 @@
     line-height: 1;
     transition: background 0.2s var(--fl-ease);
 }
+.flu-brand button svg,
+.flu-context-heading button svg,
+.flu-icon-button svg,
+.flu-deliverable-panel-actions button svg {
+    width: 18px;
+    height: 18px;
+}
+.flu-chat-scroll-bottom svg {
+    width: 20px;
+    height: 20px;
+}
 .flu-brand button:hover,
 .flu-context-heading button:hover {
     background: var(--fl-hover-strong);
@@ -183,9 +194,10 @@
 .flu-search:focus-within {
     box-shadow: 0 0 0 2px var(--fl-primary);
 }
-.flu-search span {
-    font-size: 18px;
-    line-height: 1;
+.flu-search svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
 }
 .flu-search input {
     width: 100%;
@@ -916,6 +928,68 @@
 }
 .flu-markdown input[type="checkbox"] {
     margin-right: 0.4em;
+}
+
+/* Acciones de una respuesta y de sus tablas: copiar y llevar a Excel. */
+.flu-table-block {
+    max-width: 100%;
+    margin: 0.7em 0;
+}
+.flu-markdown .flu-table-block table {
+    margin: 0;
+}
+.flu-table-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+}
+.flu-table-actions,
+.flu-message-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+.flu-table-actions {
+    margin-top: 6px;
+}
+.flu-message-actions {
+    margin-top: 8px;
+}
+.flu-table-actions button,
+.flu-message-actions button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+    padding: 4px 10px;
+    border: 1px solid var(--fl-border);
+    border-radius: 999px;
+    background: var(--fl-bg);
+    color: var(--fl-text-3);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+}
+.flu-table-actions button:hover,
+.flu-message-actions button:hover {
+    background: var(--fl-hover);
+    color: var(--fl-text);
+}
+.flu-table-actions button:focus-visible,
+.flu-message-actions button:focus-visible {
+    outline: 2px solid var(--fl-primary);
+    outline-offset: 2px;
+}
+.flu-table-actions svg,
+.flu-message-actions svg {
+    width: 14px;
+    height: 14px;
+    flex: none;
+}
+.flu-table-status,
+.flu-message-actions-note {
+    color: var(--fl-text-4);
+    font-size: 12px;
 }
 
 .flu-message-parts {

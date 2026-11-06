@@ -15,8 +15,9 @@ navegador ──► /api/v2/… (cookie de sesión) ──► proxy ──► ba
 | Rutas | `src/app-routes.tsx`, `src/components/routes/protected-route.tsx` | Rutas públicas (`/login`, `/reset-password`, `/landing`) y protegidas (`/flu`, editor de diagramas). Sin sesión, redirige a `/login`. |
 | Sesión | `src/contexts/auth-context.tsx`, `src/services/auth-service.ts`, `src/lib/session-expiry.ts` | Consulta `/auth/me`. Un 401 en una ruta protegida marca la sesión como caducada una sola vez y lleva a `/login?sessionExpired=1`. |
 | Capacidades | `src/lib/capabilities.ts` | Qué puede usar la cuenta (adjuntos múltiples, revisiones, controles de tareas, etc.). Un nombre de perfil nunca da acceso por sí mismo. |
-| Pantallas | `src/pages/flu-*`, `src/pages/chat-*` | La interfaz de trabajo en `/flu`: navegación, conversación, contexto, visor, memoria y diálogos. |
+| Pantallas | `src/pages/flu-*`, `src/pages/chat-*` | La interfaz de trabajo en `/flu`. `flu-chats.tsx` coordina el estado; las piezas viven aparte: barra lateral (`flu-chat-sidebar.tsx`), mensaje del historial (`flu-chat-message.tsx`), panel de contexto (`flu-chat-context.tsx`), diálogos (`flu-chat-dialogs.tsx`), copiar respuesta (`chat-copy-message.tsx`) y compositor (`chat-composer.tsx`). |
 | Estado del chat | `src/pages/chat-stream-state.ts`, `chat-job-state.ts`, `chat-chain-state.ts`, `chat-timeline.ts` | Reductores puros que combinan mensajes guardados, eventos en vivo, trabajos y bloques de ejecución encadenada en una línea de tiempo ordenada. |
+| Diseño y borradores | `src/hooks/use-chat-layout.ts`, `src/hooks/use-chat-draft.ts` | Anchos de paneles según la ventana. Borrador del compositor por cuenta y por chat en el navegador; se borra al cerrar sesión. |
 | Eventos | `src/hooks/use-chat-events.ts`, `src/services/v2/sse.ts` | Lector SSE acotado con latidos, reconexión con `Last-Event-ID` y tiempo de inactividad. |
 | Subidas | `src/hooks/upload-batch-manager.ts`, `src/hooks/use-upload-batches.ts`, `src/services/v2/upload-batches.ts` | Lotes de subida que sobreviven al cambio de chat. Se guarda la metadata, nunca el archivo; máximo 3 GB por archivo. |
 | Servicios | `src/services/v2/*` | Un módulo por recurso del contrato: chats, proyectos, fuentes, entregables, trabajos, miembros, memoria, modelos, permisos y biblioteca. |
@@ -62,4 +63,5 @@ Reglas que se mantienen:
 
 - **Vitest + Testing Library** en `src/**/*.test.{ts,tsx}`, con jsdom (`vitest.config.ts`, `src/test/setup.ts`).
 - Las pruebas usan dobles de los servicios. Sirven para estado, componentes y servicios; **no sustituyen** una prueba autenticada contra el backend real.
-- `npm run verify:production` corre todo: chequeos del front, pin del contrato, esquema del API, pruebas, build y revisión del bundle.
+- **Playwright** en `e2e/*.spec.ts` (`npm run test:e2e`): recorridos en navegador real sobre `dev:mock`, en claro, oscuro y 390 px, con capturas. Como las maquetas, prueban la interfaz, no el backend.
+- `npm run verify:production` corre todo: lint, chequeos del front, pin del contrato, esquema del API, pruebas, build y revisión del bundle (sin maquetas y dentro del presupuesto de peso).

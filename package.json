@@ -15,11 +15,13 @@
         "check:contract-pin": "node scripts/check-contract-pin.mjs",
         "check:api-schema": "node scripts/check-api-schema.mjs",
         "check:frontend": "node scripts/check-frontend.mjs",
-        "verify:production": "npm run check:frontend && npm run check:contract-pin && npm run check:api-schema && npm test -- --maxWorkers=1 && npm run build && npm run check:frontend -- --dist",
+        "verify:production": "npm run lint && npm run check:frontend && npm run check:contract-pin && npm run check:api-schema && npm test -- --maxWorkers=1 && npm run build && npm run check:frontend -- --dist",
         "verify:v2": "npm run verify:production",
         "preview": "vite preview --configLoader runner",
         "gen:api": "openapi-typescript contract/openapi-v2.yaml -o src/lib/api-schema.d.ts",
-        "deploy:production": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Publish-Frontend.ps1"
+        "deploy:production": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Publish-Frontend.ps1",
+        "lint": "eslint .",
+        "test:e2e": "playwright test"
     },
     "dependencies": {
         "@tailwindcss/typography": "^0.5.19",
@@ -45,6 +47,8 @@
         "tailwindcss-react-aria-components": "^2.0.1"
     },
     "devDependencies": {
+        "@eslint/js": "^9.39.5",
+        "@playwright/test": "1.63.0",
         "@tailwindcss/postcss": "^4.1.18",
         "@testing-library/jest-dom": "^7.0.1",
         "@testing-library/react": "^16.3.3",
@@ -54,6 +58,8 @@
         "@types/react": "^19.2.7",
         "@types/react-dom": "^19.2.3",
         "@vitejs/plugin-react-swc": "^4.2.2",
+        "eslint": "^9.39.5",
+        "eslint-plugin-react-hooks": "^5.2.0",
         "globals": "^16.5.0",
         "jsdom": "^29.1.1",
         "openapi-typescript": "^7.13.0",

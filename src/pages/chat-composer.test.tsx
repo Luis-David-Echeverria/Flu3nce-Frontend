@@ -26,6 +26,20 @@ describe("compositor del chat", () => {
         expect(onChange).toHaveBeenCalledWith("second");
     });
 
+    it("deja escribir mientras Flu3nce trabaja, pero no envía hasta que termina", () => {
+        const submit = vi.fn();
+        const change = vi.fn();
+        render(<ChatComposer id="busy-composer" value="Siguiente pregunta" onChange={change} onSubmit={submit} onAttach={vi.fn()} label="Mensaje" placeholder="Escribe" sendBlocked />);
+        const box = screen.getByRole("textbox", { name: "Mensaje" });
+        expect(box).toBeEnabled();
+        fireEvent.change(box, { target: { value: "Siguiente pregunta, ampliada" } });
+        expect(change).toHaveBeenCalledWith("Siguiente pregunta, ampliada");
+        fireEvent.keyDown(box, { key: "Enter" });
+        expect(submit).not.toHaveBeenCalled();
+        expect(screen.getByRole("button", { name: "Enviar mensaje" })).toBeDisabled();
+        expect(screen.getByText("Puedes seguir escribiendo; lo envías cuando Flu3nce termine")).toBeInTheDocument();
+    });
+
     it("permite adjuntar y enviar con Enter sin eliminar Shift + Enter", () => {
         const submit = vi.fn();
         const attach = vi.fn();

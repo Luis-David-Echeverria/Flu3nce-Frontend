@@ -67,7 +67,7 @@ export function SectionTitle({ children, aside }: { children: ReactNode; aside?:
  * Acepta tanto `[Evidencia] texto` como `[Evidencia: texto]`.
  */
 export function AnnotatedNarrative({ children }: { children: string }) {
-    const marker = /\[(Evidencia|Inferencia|Supuesto|Recomendación)(?::\s*([^\]]+))?\]\s*([^\[]*)/gi;
+    const marker = /\[(Evidencia|Inferencia|Supuesto|Recomendación)(?::\s*([^\]]+))?\]\s*([^[]*)/gi;
     const matches = [...children.matchAll(marker)];
     if (!matches.length) return <>{children}</>;
     const preface = children.slice(0, matches[0].index).trim();

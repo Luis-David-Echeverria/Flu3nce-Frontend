@@ -39,12 +39,14 @@ git submodule update --init --recursive
 | `npm run dev` | Desarrollo contra el API real, en `http://localhost:5174`. |
 | `npm run dev:mock` | Desarrollo con datos locales tipados; no llama al modelo. |
 | `npm test -- --maxWorkers=1` | Pruebas de componentes, servicios y estado. |
+| `npm run test:e2e` | Recorridos en navegador real (Playwright) sobre `dev:mock`: claro, oscuro y 390 px, con capturas en `test-results/`. La primera vez: `npx playwright install chromium`. |
+| `npm run lint` | ESLint: errores de TypeScript y reglas de hooks de React. |
 | `npm run check:frontend` | Detecta módulos sin uso, dependencias no declaradas y rutas retiradas. |
 | `npm run check:contract-pin` | Comprueba que el submódulo apunte a un commit de `main` del contrato. |
 | `npm run check:api-schema` | Comprueba que los tipos generados coinciden con el contrato. |
 | `npm run gen:api` | Regenera `src/lib/api-schema.d.ts` desde `contract/openapi-v2.yaml`. |
 | `npm run build` | Compila TypeScript y genera el bundle de producción en `dist/`. |
-| `npm run verify:production` | Todo lo anterior más la revisión de que el bundle no lleve datos de maqueta. **Correrlo antes de cada PR y de publicar.** |
+| `npm run verify:production` | Lint, chequeos, pruebas y build, más la revisión del bundle: sin datos de maqueta y dentro del presupuesto de peso (140 KB gzip lo inicial y 120 KB el chat). **Correrlo antes de cada PR y de publicar.** |
 
 ## Rutas
 
@@ -84,7 +86,7 @@ Las respuestas llegan por SSE, con reconexión mediante `Last-Event-ID`. Qué mo
 
 ## Verificación en GitHub
 
-`.github/workflows/verify.yml` corre `npm run verify:production` en cada PR y en cada push a `main`. Como el contrato es privado, el workflow necesita el secreto **`CONTRACT_READ_SSH_KEY`**. Cómo crearlo: [CONTRIBUTING.md](CONTRIBUTING.md#verificación-en-github).
+`.github/workflows/verify.yml` corre `npm run verify:production` en cada PR y en cada push a `main`, y en paralelo los recorridos en navegador (`npm run test:e2e`), que guardan sus capturas como artefacto. Como el contrato es privado, el workflow necesita el secreto **`CONTRACT_READ_SSH_KEY`**. Cómo crearlo: [CONTRIBUTING.md](CONTRIBUTING.md#verificación-en-github).
 
 ## Publicación
 

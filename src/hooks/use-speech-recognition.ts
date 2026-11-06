@@ -29,7 +29,8 @@ interface UseSpeechRecognitionOptions {
 
 const getSpeechRecognition = (): (new () => SpeechRecognition) | null => {
     if (typeof window === "undefined") return null;
-    return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || null;
+    const speechWindow = window as unknown as { SpeechRecognition?: new () => SpeechRecognition; webkitSpeechRecognition?: new () => SpeechRecognition };
+    return speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition || null;
 };
 
 const DENIED_MESSAGE = "Permiso de micrófono denegado.";
@@ -83,7 +84,7 @@ export const useSpeechRecognition = ({
             onEndRef.current?.();
         };
 
-        recognition.onerror = (event: any) => {
+        recognition.onerror = (event: { error: string }) => {
             if (event.error !== "aborted") {
                 const message = event.error === "not-allowed" || event.error === "service-not-allowed"
                     ? DENIED_MESSAGE

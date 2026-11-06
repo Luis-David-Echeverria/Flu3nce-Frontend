@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiServiceError } from "@/services/v2/http";
@@ -78,6 +78,21 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("pantalla de chats QA", () => {
+    it("conserva el nuevo borrador si falla el primer envío después de crear el chat", async () => {
+        let failSend!: (reason: Error) => void;
+        sendChatMessage.mockImplementationOnce(() => new Promise((_resolve, reject) => { failSend = reject; }));
+        render(<MemoryRouter initialEntries={["/flu"]}><FluChatsPage /></MemoryRouter>);
+        const firstMessage = await screen.findByRole("textbox", { name: "Tu primer mensaje" });
+        fireEvent.change(firstMessage, { target: { value: "Solicitud inicial" } });
+        fireEvent.click(screen.getByRole("button", { name: "Enviar primer mensaje" }));
+        await waitFor(() => expect(sendChatMessage).toHaveBeenCalledOnce());
+        const nextMessage = await screen.findByRole("textbox", { name: "Mensaje para Flu3nce" });
+        expect(nextMessage).toBeEnabled();
+        fireEvent.change(nextMessage, { target: { value: "Lo que escribí mientras respondía" } });
+        await act(async () => { failSend(new Error("Red no disponible")); });
+        expect(await screen.findByText(/El chat se creó, pero no se completó el envío/)).toBeInTheDocument();
+        expect(nextMessage).toHaveValue("Lo que escribí mientras respondía");
+    });
     it("reconstruye texto y entregables en orden desde la cadena guardada con una sola actividad final plegada", async () => {
         const base = { createdAt: "2026-11-02T12:00:00Z", role: "flu", kind: "text" };
         const block = (messageId: string, seq: number, kind: string, extra = {}) => ({ requestId: "request_1", blockId: `block_${messageId}`, messageId, seq, kind, final: false, ...extra });

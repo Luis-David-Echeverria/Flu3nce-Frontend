@@ -12,6 +12,8 @@ type Props = {
     attachments?: File[];
     onRemoveAttachment?: (index: number) => void;
     disabled?: boolean;
+    /** Se puede seguir escribiendo, pero no enviar: Flu3nce está atendiendo el mensaje anterior. */
+    sendBlocked?: boolean;
     attachDisabled?: boolean;
     placeholder: string;
     label: string;
@@ -49,7 +51,7 @@ function attachmentNameParts(name: string) {
     return { start: stem.slice(0, -tailLength), end: `${stem.slice(-tailLength)}${extension}` };
 }
 
-export function ChatComposer({ id, value, onChange, onSubmit, onAttach, onOpenLibrary, attachments = [], onRemoveAttachment, disabled, submitDisabled, uploadControl, attachDisabled, placeholder, label, submitLabel = "Enviar mensaje", modelControls, modelStatus, uploadProgress = null, stopControl }: Props) {
+export function ChatComposer({ id, value, onChange, onSubmit, onAttach, onOpenLibrary, attachments = [], onRemoveAttachment, disabled, sendBlocked = false, submitDisabled, uploadControl, attachDisabled, placeholder, label, submitLabel = "Enviar mensaje", modelControls, modelStatus, uploadProgress = null, stopControl }: Props) {
     const textarea = useRef<HTMLTextAreaElement>(null);
     const draftRef = useRef(value);
     draftRef.current = value;
@@ -75,17 +77,17 @@ export function ChatComposer({ id, value, onChange, onSubmit, onAttach, onOpenLi
 
     const handleSubmit = (event: FormEvent) => {
         event.preventDefault();
-        if (!disabled && !submitDisabled && (value.trim() || attachments.length)) { if (isListening) stop(); onSubmit(); }
+        if (!disabled && !sendBlocked && !submitDisabled && (value.trim() || attachments.length)) { if (isListening) stop(); onSubmit(); }
     };
     const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
         if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault();
-            if (!disabled && !submitDisabled && (value.trim() || attachments.length)) { if (isListening) stop(); onSubmit(); }
+            if (!disabled && !sendBlocked && !submitDisabled && (value.trim() || attachments.length)) { if (isListening) stop(); onSubmit(); }
         }
     };
 
     return <form onSubmit={handleSubmit} className={`flu-chat-composer ${stopControl ? "is-working" : ""}`}>
-        {attachments.length ? <div className="flu-chat-attachment-tray" aria-label="Archivos pendientes de enviar">{attachments.map((file, index) => { const progress = uploadProgress; const name = attachmentNameParts(file.name); return <div key={attachmentKey(file)} className="flu-chat-attachment"><span aria-hidden="true">▤</span><span className="flu-chat-attachment-name" title={file.name}><span className="flu-chat-attachment-name-start">{name.start}</span><span className="flu-chat-attachment-name-end">{name.end}</span></span><small>{file.size < 1048576 ? `${Math.max(1, Math.round(file.size / 1024))} KB` : `${(file.size / 1048576).toFixed(1)} MB`}</small><span className="flu-chat-attachment-state">{progress === null ? "Pendiente" : progress >= 100 ? "Procesando" : `Subiendo ${progress}%`}</span><button type="button" onClick={() => onRemoveAttachment?.(index)} disabled={disabled} aria-label={`Quitar ${file.name}`} title={`Quitar ${file.name}`}>×</button>{progress !== null ? <div className="flu-chat-attachment-progress" role="progressbar" aria-label={`Carga de ${file.name}`} aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${progress}%` }} /></div> : null}</div>; })}</div> : null}
+        {attachments.length ? <div className="flu-chat-attachment-tray" aria-label="Archivos pendientes de enviar">{attachments.map((file, index) => { const progress = uploadProgress; const name = attachmentNameParts(file.name); return <div key={attachmentKey(file)} className="flu-chat-attachment"><span aria-hidden="true">▤</span><span className="flu-chat-attachment-name" title={file.name}><span className="flu-chat-attachment-name-start">{name.start}</span><span className="flu-chat-attachment-name-end">{name.end}</span></span><small>{file.size < 1048576 ? `${Math.max(1, Math.round(file.size / 1024))} KB` : `${(file.size / 1048576).toFixed(1)} MB`}</small><span className="flu-chat-attachment-state">{progress === null ? "Pendiente" : progress >= 100 ? "Procesando" : `Subiendo ${progress}%`}</span><button type="button" onClick={() => onRemoveAttachment?.(index)} disabled={disabled || sendBlocked} aria-label={`Quitar ${file.name}`} title={`Quitar ${file.name}`}>×</button>{progress !== null ? <div className="flu-chat-attachment-progress" role="progressbar" aria-label={`Carga de ${file.name}`} aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${progress}%` }} /></div> : null}</div>; })}</div> : null}
         <label className="sr-only" htmlFor={id}>{label}</label>
         <textarea ref={textarea} id={id} value={value} onChange={(event) => { draftRef.current = event.target.value; onChange(event.target.value); }} onKeyDown={handleKeyDown} disabled={disabled} placeholder={placeholder} rows={2} className="flu-chat-composer-input" />
         <div className="flu-chat-composer-toolbar">
@@ -93,9 +95,9 @@ export function ChatComposer({ id, value, onChange, onSubmit, onAttach, onOpenLi
             {onOpenLibrary ? <button type="button" onClick={onOpenLibrary} disabled={attachDisabled} className="flu-chat-composer-attach" aria-label="Adjuntar desde Flu3nce" title="Adjuntar desde la biblioteca del proyecto"><LibraryIcon /><span>Desde Flu3nce</span></button> : null}
             {modelControls ? <select className="flu-chat-composer-model" aria-label="Modelo de Flu3nce" value={modelControls.selected} onChange={(event) => modelControls.onChange(event.target.value)}>{modelControls.catalog.models.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}</select> : null}
             {!modelControls && modelStatus ? <span className="flu-chat-composer-model-status"><span>{modelStatus.state === "loading" ? "Consultando…" : "No disponible"}</span>{modelStatus.state !== "loading" ? <button type="button" onClick={modelStatus.onRetry} aria-label="Reintentar consulta de modelos" title="Reintentar consulta de modelos">↻</button> : null}</span> : null}
-            <span className="flu-chat-composer-hint">Enter para enviar · Shift + Enter para nueva línea</span>
+            <span className="flu-chat-composer-hint">{sendBlocked && !disabled ? "Puedes seguir escribiendo; lo envías cuando Flu3nce termine" : "Enter para enviar · Shift + Enter para nueva línea"}</span>
             <button type="button" onClick={() => { setDictationNotice(null); if (!isSupported) { setDictationNotice("El dictado no está disponible en este navegador."); return; } if (isListening) stop(); else void start(); }} disabled={disabled} className={`flu-chat-composer-dictate ${isListening ? "is-listening" : ""}`} aria-label={isListening ? "Detener dictado" : "Iniciar dictado"} aria-pressed={isListening} title={isListening ? "Detener dictado" : "Dictar mensaje"}><MicrophoneIcon /></button>
-            {uploadControl || stopControl ? <button type="button" onClick={uploadControl ?? stopControl?.onStop} disabled={stopControl?.requested} className="flu-chat-composer-send is-task-control" aria-label={uploadControl ? "Cancelar envío de archivos" : stopControl?.requested ? "Deteniendo Flu3nce" : "Detener Flu3nce"} title={uploadControl ? "Cancelar envío de archivos" : "Detener Flu3nce"}><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg></button> : <button type="submit" disabled={disabled || submitDisabled || (!value.trim() && !attachments.length)} className="flu-chat-composer-send" aria-label={submitLabel} title={submitLabel}><SendIcon /></button>}
+            {uploadControl || stopControl ? <button type="button" onClick={uploadControl ?? stopControl?.onStop} disabled={stopControl?.requested} className="flu-chat-composer-send is-task-control" aria-label={uploadControl ? "Cancelar envío de archivos" : stopControl?.requested ? "Deteniendo Flu3nce" : "Detener Flu3nce"} title={uploadControl ? "Cancelar envío de archivos" : "Detener Flu3nce"}><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg></button> : <button type="submit" disabled={disabled || sendBlocked || submitDisabled || (!value.trim() && !attachments.length)} className="flu-chat-composer-send" aria-label={submitLabel} title={submitLabel}><SendIcon /></button>}
         </div>
         {isListening ? <p role="status" className="flu-chat-composer-notice">Escuchando… pulsa el micrófono para detener.</p> : dictationError || dictationNotice ? <p role="status" className="flu-chat-composer-notice">{dictationError ?? dictationNotice}</p> : null}
     </form>;
