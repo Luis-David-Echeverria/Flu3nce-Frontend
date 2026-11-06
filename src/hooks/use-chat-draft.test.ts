@@ -37,6 +37,25 @@ describe("borrador del compositor por chat", () => {
         expect(hook.result.current.draft).toBe("");
     });
 
+    it("al fallar un envío conserva lo escrito después y recupera el texto solo si está vacío", () => {
+        const hook = renderHook(() => useChatDraft("u1", "chat:a"));
+        act(() => hook.result.current.setDraft("Mi siguiente pregunta"));
+        act(() => hook.result.current.restoreIfEmpty("chat:a", "Solicitud fallida"));
+        expect(hook.result.current.draft).toBe("Mi siguiente pregunta");
+        act(() => hook.result.current.setDraft(""));
+        act(() => hook.result.current.restoreIfEmpty("chat:a", "Solicitud fallida"));
+        expect(hook.result.current.draft).toBe("Solicitud fallida");
+    });
+
+    it("recupera un envío en su chat sin tocar el borrador del chat abierto", () => {
+        const hook = renderHook(({ scope }) => useChatDraft("u1", scope), { initialProps: { scope: "chat:a" } });
+        act(() => hook.result.current.setDraft("Borrador para A"));
+        act(() => hook.result.current.restoreIfEmpty("chat:b", "Solicitud desde B"));
+        expect(hook.result.current.draft).toBe("Borrador para A");
+        hook.rerender({ scope: "chat:b" });
+        expect(hook.result.current.draft).toBe("Solicitud desde B");
+    });
+
     it("separa los borradores por cuenta y los borra al cerrar sesión", () => {
         const first = renderHook(() => useChatDraft("u1", "chat:a"));
         act(() => first.result.current.setDraft("De u1"));

@@ -91,7 +91,7 @@ export const FluChatsPage = () => {
     const [sourcesCursor, setSourcesCursor] = useState<string | undefined>();
     const [sourcesError, setSourcesError] = useState<string | null>(null);
     const firstMessageScope = `new:${projectId || "sin-proyecto"}`;
-    const { draft, setDraft, clearSent: clearSentDraft } = useChatDraft(user?.userId, `chat:${chatId}`);
+    const { draft, setDraft, clearSent: clearSentDraft, restoreIfEmpty: restoreSentDraft } = useChatDraft(user?.userId, `chat:${chatId}`);
     const { draft: firstMessage, setDraft: setFirstMessage, clearSent: clearSentFirstMessage } = useChatDraft(user?.userId, firstMessageScope);
     const [stagedFiles, setStagedFiles] = useState<File[]>([]);
     const { batches: uploadBatches, manager: uploadManager } = useUploadBatches(user?.userId ?? "anonymous", !isMockMode);
@@ -567,7 +567,7 @@ export const FluChatsPage = () => {
                         }
                         if (turn?.replyId) setExchangeMetadata((current) => ({ ...current, [turn.replyId!]: { requestId: turn.requestId, failure: turn.failure, permissionsPending: turn.permissionsPending } }));
                     }
-                    if (event === "received") { clearSentDraft(`chat:${targetChatId}`, prompt); setFirstMessage((current) => current.trim() === prompt ? "" : current); }
+                    if (event === "received") clearSentDraft(`chat:${targetChatId}`, prompt);
                     if (!turn?.phaseB) {
                         const labels: Record<string, string> = { reading_sources: "Leyendo las fuentes…", searching: "Buscando en las fuentes…", tool: "Consultando herramientas…", model_call: "Pensando…", validating: "Verificando la respuesta…", retry: "Revisando la respuesta…" };
                         if (labels[event]) setActivity(labels[event]);
@@ -648,7 +648,7 @@ export const FluChatsPage = () => {
             setStagedFiles([]);
 
         } catch {
-            if (prompt) setDraft(prompt);
+            restoreSentDraft(`chat:${chat.id}`, prompt);
             setError("El chat se creó, pero no se completó el envío. Revisa los archivos del chat antes de reintentar.");
         }
         await getChat(chat.id).then((next) => { latestMessageId.current = next.messages[0]?.id; setSession(next); }).catch(() => undefined);

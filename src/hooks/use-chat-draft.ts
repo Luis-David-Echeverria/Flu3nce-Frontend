@@ -73,5 +73,17 @@ export function useChatDraft(userId: string | undefined, scope: string) {
         } else if (readDraft(base.userId, scope).trim() === sent) writeDraft(base.userId, scope, "");
     }, []);
 
-    return { draft: current.value, setDraft, clearSent };
+    /** Recupera un envío fallido solo si su chat no tiene ya otro borrador. */
+    const restoreIfEmpty = useCallback((scope: string, text: string) => {
+        const base = latest.current;
+        if (!text.trim()) return;
+        if (base.scope === scope) {
+            if (base.value.trim()) return;
+            latest.current = { ...base, value: text };
+            setState(latest.current);
+            writeDraft(base.userId, scope, text);
+        } else if (!readDraft(base.userId, scope).trim()) writeDraft(base.userId, scope, text);
+    }, []);
+
+    return { draft: current.value, setDraft, clearSent, restoreIfEmpty };
 }
