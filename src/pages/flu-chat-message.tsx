@@ -1,5 +1,6 @@
 import { Suspense, type ComponentProps } from "react";
 import { ChatMarkdown } from "@/components/custom/chat-markdown";
+import { ChatTable } from "@/components/custom/chat-table";
 import { ConsultationDeliverableCard, type Card } from "@/components/custom/consultation-deliverable-card";
 import { ConsultationQuestions } from "@/components/custom/consultation-questions";
 import { ReadableQuestionPrompt } from "@/components/custom/readable-question-prompt";
@@ -9,6 +10,7 @@ import type { Job, PermissionPending, Source } from "@/services/v2/types";
 import { SavedChainActivity, SavedChatActivity } from "./chat-activity";
 import { ChatDeliverableTile } from "./chat-deliverable-tile";
 import { ChatJobDetails } from "./chat-job-details";
+import { ChatCopyMessage, messageCopyText } from "./chat-copy-message";
 import { ChatPermissions } from "./chat-permissions";
 import { ChatReference } from "./chat-reference";
 import { SourceTypeIcon } from "./flu-source-preview";
@@ -45,6 +47,7 @@ export function FluChatMessage({ item, chatId, projectId, actionsCurrent, metada
         const activityGroup = !item.chainBlock ? item.parts?.find((part) => part.kind === "activity_group")?.activityGroup : undefined;
                 const displayText = item.intent?.state === "pending" && !actionsCurrent ? "Esta propuesta ya venció." : visibleMessageText(item);
         const intent = item.intent as ChatIntent | undefined;
+    const copyText = item.role === "flu" && !item.intent ? messageCopyText(item, displayText, explanation) : "";
         const revision = intent?.revisionProposal;
         const revises = intent?.intentKind === "revise_deliverable";
         const saves = intent?.intentKind === "save_context";
@@ -55,7 +58,7 @@ export function FluChatMessage({ item, chatId, projectId, actionsCurrent, metada
         return <article aria-label={`${item.role === "user" ? "Tu mensaje" : item.role === "system" ? "Mensaje del sistema" : "Respuesta de Flu3nce"}, ${messageDate(item.createdAt)}`} className={`flu-message min-w-0 rounded-2xl px-4 py-3 text-sm leading-6 ${item.role === "user" ? "ml-auto flu-user" : "flu-assistant"}`}>
             {item.parts?.some((part) => part.kind !== "activity_group") ? <div className="flu-message-parts">{item.parts.map((part, index) => {
                 if (part.kind === "text" && part.text) return <Suspense key={index} fallback={<p className="whitespace-pre-wrap break-words">{part.text}</p>}><ReadableQuestionPrompt prompt={part.text} /></Suspense>;
-                if (part.kind === "table" && part.table) return <div key={index} className="overflow-x-auto"><table className="flu-message-part-table"><thead><tr>{part.table.columns.map((column, cell) => <th key={cell} scope="col">{column}</th>)}</tr></thead><tbody>{part.table.rows.map((row, rowIndex) => <tr key={rowIndex}>{part.table!.columns.map((_, cell) => <td key={cell}>{row[cell] ?? ""}</td>)}</tr>)}</tbody></table>{part.table.calculated ? <small>Los valores marcados «calculado» fueron calculados por Flu3nce.</small> : null}</div>;
+                if (part.kind === "table" && part.table) return <div key={index}><ChatTable className="flu-message-part-table"><thead><tr>{part.table.columns.map((column, cell) => <th key={cell} scope="col">{column}</th>)}</tr></thead><tbody>{part.table.rows.map((row, rowIndex) => <tr key={rowIndex}>{part.table!.columns.map((_, cell) => <td key={cell}>{row[cell] ?? ""}</td>)}</tr>)}</tbody></ChatTable>{part.table.calculated ? <small>Los valores marcados «calculado» fueron calculados por Flu3nce.</small> : null}</div>;
                 if (part.kind === "deliverable_card" && part.deliverableCard) return <ChatDeliverableTile key={index} card={part.deliverableCard} onOpen={() => onOpenPartDeliverable(part.deliverableCard!)} />;
                 if (part.kind === "question" && part.clarification) return <Suspense key={index} fallback={<p>{part.clarification.prompt}</p>}><ReadableQuestionPrompt prompt={part.clarification.prompt} /></Suspense>;
                 return null;
@@ -85,6 +88,7 @@ export function FluChatMessage({ item, chatId, projectId, actionsCurrent, metada
             </div> : null}
             {activityGroup ? <SavedChatActivity group={activityGroup} title={activityGroup.jobId && item.deliverableCard?.version ? `Ya puedes consultar ${deliverableLabel(item.deliverableCard.deliverableType).toLocaleLowerCase("es-MX")}` : undefined} /> : null}
             {item.chainBlock?.final ? <SavedChainActivity block={item.chainBlock} /> : null}
+                {copyText ? <ChatCopyMessage text={copyText} /> : null}
                 {showReferences ? <ChatReference chatId={chatId} messageId={item.id} requestId={item.chainBlock?.requestId ?? metadata?.requestId} /> : null}
         </article>;
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useSearchParams } from "react-router";
+import { ArrowDown, Maximize01, Menu01, Minimize01 } from "@untitledui/icons";
 import { ConsultationDeliverableCard, type Card } from "@/components/custom/consultation-deliverable-card";
 import { CompartirModal } from "@/components/custom/compartir-modal";
 import { ManualVersionModal } from "@/components/custom/manual-version-modal";
@@ -11,6 +12,7 @@ import { useUploadBatches } from "@/hooks/use-upload-batches";
 import { hasCapability } from "@/lib/capabilities";
 import { useChatEvents } from "@/hooks/use-chat-events";
 import { useChatLayout } from "@/hooks/use-chat-layout";
+import { clearStoredDrafts, useChatDraft } from "@/hooks/use-chat-draft";
 import { validateUploadFiles } from "@/hooks/upload-batch-manager";
 import { isMockMode } from "@/config/api-mode";
 import { createProject, getProject, listProjectsPage, type V2Project } from "@/services/v2/projects";
@@ -88,8 +90,9 @@ export const FluChatsPage = () => {
     const [sources, setSources] = useState<Source[]>([]);
     const [sourcesCursor, setSourcesCursor] = useState<string | undefined>();
     const [sourcesError, setSourcesError] = useState<string | null>(null);
-    const [draft, setDraft] = useState("");
-    const [firstMessage, setFirstMessage] = useState("");
+    const firstMessageScope = `new:${projectId || "sin-proyecto"}`;
+    const { draft, setDraft, clearSent: clearSentDraft } = useChatDraft(user?.userId, `chat:${chatId}`);
+    const { draft: firstMessage, setDraft: setFirstMessage, clearSent: clearSentFirstMessage } = useChatDraft(user?.userId, firstMessageScope);
     const [stagedFiles, setStagedFiles] = useState<File[]>([]);
     const { batches: uploadBatches, manager: uploadManager } = useUploadBatches(user?.userId ?? "anonymous", !isMockMode);
     const visibleUploadBatches = uploadBatches.filter((record) => record.chatId === chatId);
@@ -564,7 +567,7 @@ export const FluChatsPage = () => {
                         }
                         if (turn?.replyId) setExchangeMetadata((current) => ({ ...current, [turn.replyId!]: { requestId: turn.requestId, failure: turn.failure, permissionsPending: turn.permissionsPending } }));
                     }
-                    if (event === "received") { setDraft((current) => current.trim() === prompt ? "" : current); setFirstMessage((current) => current.trim() === prompt ? "" : current); }
+                    if (event === "received") { clearSentDraft(`chat:${targetChatId}`, prompt); setFirstMessage((current) => current.trim() === prompt ? "" : current); }
                     if (!turn?.phaseB) {
                         const labels: Record<string, string> = { reading_sources: "Leyendo las fuentes…", searching: "Buscando en las fuentes…", tool: "Consultando herramientas…", model_call: "Pensando…", validating: "Verificando la respuesta…", retry: "Revisando la respuesta…" };
                         if (labels[event]) setActivity(labels[event]);
@@ -631,6 +634,7 @@ export const FluChatsPage = () => {
     const startFromMessage = (text: string) => void run(async () => {
         const prompt = text.trim();
         const files = [...stagedFiles];
+        const scope = firstMessageScope;
         if ((!prompt && !files.length) || !canStartInScope) return;
         if (files.length && !isMockMode && !prompt) throw new ChatUserError("Escribe qué quieres hacer con los archivos antes de enviarlos.");
         setActivity(files.length ? "Adjuntando archivos…" : "Analizando tu solicitud…");
@@ -640,7 +644,7 @@ export const FluChatsPage = () => {
         await refreshList();
         try {
             await sendFilesAndPrompt(chat.id, files, prompt);
-            setFirstMessage("");
+            clearSentFirstMessage(scope, prompt);
             setStagedFiles([]);
 
         } catch {
@@ -667,7 +671,7 @@ export const FluChatsPage = () => {
             }
         }
         await sendFilesAndPrompt(chatId, files, text.trim());
-        if (text.trim()) setDraft("");
+        if (text.trim()) clearSentDraft(`chat:${chatId}`, text);
 
         await refreshChat();
         await refreshList();
@@ -835,7 +839,7 @@ export const FluChatsPage = () => {
             onCloseBackdrop={() => setNavOpen(false)}
             onCollapse={() => { setNavOpen(false); window.requestAnimationFrame(() => navOpenButton.current?.focus()); }}
             closeButtonRef={navCloseButton}
-            onNewChat={() => { setParams({}); setSession(null); setFirstMessage(""); setNavOpen(window.innerWidth > 760); }}
+            onNewChat={() => { setParams({}); setSession(null); setNavOpen(window.innerWidth > 760); }}
             chatSearch={chatSearch}
             onChatSearch={setChatSearch}
             chatId={chatId}
@@ -851,7 +855,7 @@ export const FluChatsPage = () => {
             expandedProjectId={expandedProjectId}
             onExpandProject={setExpandedProjectId}
             onOpenProject={openProject}
-            onNewChatInProject={(newProjectId) => { setExpandedProjectId(newProjectId); setParams({ project: newProjectId }); setSession(null); setFirstMessage(""); if (window.innerWidth <= 760) setNavOpen(false); }}
+            onNewChatInProject={(newProjectId) => { setExpandedProjectId(newProjectId); setParams({ project: newProjectId }); setSession(null); if (window.innerWidth <= 760) setNavOpen(false); }}
             onCreateProject={openProjectCreation}
             account={{
                 name: accountName,
@@ -867,14 +871,14 @@ export const FluChatsPage = () => {
                 onOpenMemory: () => { setUserMenuOpen(false); closePreview(); setMemoryOpen(true); if (viewportWidth <= 760) setNavOpen(false); },
                 showReferences,
                 onToggleReferences: toggleReferences,
-                onLogout: () => void logout(),
+                onLogout: () => { clearStoredDrafts(user?.userId); void logout(); },
             }}
         />
 
         <section className="flu-main flex min-h-0 min-w-0 flex-1 flex-col" onDragEnter={(event) => { if (event.dataTransfer.types.includes("Files") && !directoryOpen) { event.preventDefault(); dragDepth.current++; setDraggingFiles(true); } }} onDragOver={(event) => { if (event.dataTransfer.types.includes("Files") && !directoryOpen) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }} onDragLeave={(event) => { if (event.dataTransfer.types.includes("Files")) { dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDraggingFiles(false); } }} onDrop={(event) => { if (!directoryOpen && event.dataTransfer.files.length) { event.preventDefault(); stageFiles(event.dataTransfer.files); } dragDepth.current = 0; setDraggingFiles(false); }}>
             {draggingFiles ? <div className="flu-chat-drop-overlay" aria-hidden="true">Suelta los archivos para añadirlos a la bandeja</div> : null}
             <header className="flu-topbar flex shrink-0 flex-wrap items-center justify-between gap-3 px-5 py-4">
-                <div className="flu-breadcrumb">{!navOpen ? <button ref={navOpenButton} type="button" aria-label="Abrir navegación" onClick={() => { setNavOpen(true); window.requestAnimationFrame(() => navCloseButton.current?.focus()); }} className="flu-icon-button">☰</button> : null}<span>{selectedProject?.name ?? "Chats"}</span><span aria-hidden="true">›</span>{renamingChat ? <form className="flu-chat-rename-form" onSubmit={(event) => { event.preventDefault(); renameChat(); }} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setRenamingChat(false); } }}><input autoFocus aria-label="Nuevo nombre del chat" maxLength={120} value={chatTitleDraft} onChange={(event) => setChatTitleDraft(event.target.value)} /><button type="submit" disabled={busy || !chatTitleDraft.trim()}>Guardar</button><button type="button" onClick={() => setRenamingChat(false)}>Cancelar</button></form> : session && canWrite && !directoryOpen ? <button type="button" className="flu-chat-rename-trigger" aria-label="Renombrar chat" title="Renombrar chat" onClick={() => { setChatTitleDraft(session.chat.title); setRenamingChat(true); }}><span className="truncate">{session.chat.title}</span><EditIcon /></button> : <strong>{directoryOpen ? "Explorar" : session?.chat.title ?? "Nueva conversación"}</strong>}</div>
+                <div className="flu-breadcrumb">{!navOpen ? <button ref={navOpenButton} type="button" aria-label="Abrir navegación" onClick={() => { setNavOpen(true); window.requestAnimationFrame(() => navCloseButton.current?.focus()); }} className="flu-icon-button"><Menu01 aria-hidden="true" /></button> : null}<span>{selectedProject?.name ?? "Chats"}</span><span aria-hidden="true">›</span>{renamingChat ? <form className="flu-chat-rename-form" onSubmit={(event) => { event.preventDefault(); renameChat(); }} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setRenamingChat(false); } }}><input autoFocus aria-label="Nuevo nombre del chat" maxLength={120} value={chatTitleDraft} onChange={(event) => setChatTitleDraft(event.target.value)} /><button type="submit" disabled={busy || !chatTitleDraft.trim()}>Guardar</button><button type="button" onClick={() => setRenamingChat(false)}>Cancelar</button></form> : session && canWrite && !directoryOpen ? <button type="button" className="flu-chat-rename-trigger" aria-label="Renombrar chat" title="Renombrar chat" onClick={() => { setChatTitleDraft(session.chat.title); setRenamingChat(true); }}><span className="truncate">{session.chat.title}</span><EditIcon /></button> : <strong>{directoryOpen ? "Explorar" : session?.chat.title ?? "Nueva conversación"}</strong>}</div>
                 {!directoryOpen ? <button type="button" aria-expanded={contextOpen && !openedDeliverable && !openedSource && !memoryOpen} aria-controls="flu-context" onClick={() => { if (openedDeliverable || openedSource || memoryOpen) { closePreview(); closeMemory(); setContextOpen(true); } else setContextOpen((value) => !value); }} className="flu-context-toggle flu-context-topbar-button"><ContextIcon />Contexto</button> : null}
             </header>
             {showReferences && chatId && !directoryOpen ? <div className="flu-chat-id-strip"><ChatReference chatId={chatId} /></div> : null}
@@ -900,7 +904,7 @@ export const FluChatsPage = () => {
                     <span className="flu-eyebrow">TU ESPACIO DE CONSULTORÍA</span>
                     <h1>¿Qué quieres construir hoy?</h1>
                     <div className="flu-suggestions">{["Ayúdame a crear un documento", "Quiero entender y mejorar un proceso", "Tengo archivos; ayúdame a empezar"].map((example) => <button key={example} type="button" disabled={busy || unavailable || !canStartInScope} onClick={() => startFromMessage(example)}>{example}<span aria-hidden="true">→</span></button>)}</div>
-                    <ChatComposer id="flu-first-message" value={firstMessage} onChange={setFirstMessage} onSubmit={() => startFromMessage(firstMessage)} onAttach={() => sourceInput.current?.click()} attachments={stagedFiles} onRemoveAttachment={(index) => setStagedFiles((items) => items.filter((_, position) => position !== index))} modelControls={modelControls} modelStatus={modelStatus} disabled={busy || unavailable || !canStartInScope} attachDisabled={busy || unavailable || !canStartInScope || !hasCapability(user, "attachments_multiple")} label="Tu primer mensaje" submitLabel="Enviar primer mensaje" placeholder="Escribe lo que quieras explorar…" />
+                    <ChatComposer id="flu-first-message" value={firstMessage} onChange={setFirstMessage} onSubmit={() => startFromMessage(firstMessage)} onAttach={() => sourceInput.current?.click()} attachments={stagedFiles} onRemoveAttachment={(index) => setStagedFiles((items) => items.filter((_, position) => position !== index))} modelControls={modelControls} modelStatus={modelStatus} disabled={unavailable || !canStartInScope} sendBlocked={busy} attachDisabled={busy || unavailable || !canStartInScope || !hasCapability(user, "attachments_multiple")} label="Tu primer mensaje" submitLabel="Enviar primer mensaje" placeholder="Escribe lo que quieras explorar…" />
                 </div>
             </div> : session ? <>
                 <div ref={chatLog} onScroll={updateChatScroll} role="log" aria-label="Conversación" className="flu-log min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-4 py-6 sm:px-8">
@@ -945,8 +949,8 @@ export const FluChatsPage = () => {
                         {visibleLiveTurn ? <ChatStreamResponse turn={visibleLiveTurn} showReferences={showReferences} onOpenDeliverable={openPartDeliverable} /> : null}
                     </div>
                 </div>
-                {showScrollBottom ? <button type="button" onClick={scrollToChatBottom} className={`flu-chat-scroll-bottom ${newReplyBelow ? "has-new-reply" : ""}`} aria-label={newReplyBelow ? "Nueva respuesta de Flu3nce: ir al final" : "Ir al final de la conversación"} title={newReplyBelow ? "Nueva respuesta de Flu3nce" : "Ir al final de la conversación"}><span aria-hidden="true">↓</span>{newReplyBelow ? <span className="flu-chat-scroll-unread" aria-hidden="true" /> : null}</button> : null}
-                <div className="flu-composer-area shrink-0 px-4 py-4 sm:px-8">{visibleUploadBatches.map((record) => <ChatUploadBatch key={record.id} record={record} manager={uploadManager} />)}<ChatComposer id="flu-chat-message" submitDisabled={!!activeUploadBatch} uploadControl={activeUploadBatch ? () => void uploadManager.cancel(activeUploadBatch.id) : undefined} value={draft} onChange={setDraft} onSubmit={send} onAttach={() => sourceInput.current?.click()} onOpenLibrary={!isMockMode && !session.chat.unassigned ? () => { closePreview(); closeMemory(); setContextOpen(true); setOpenLibrarySignal((value) => value + 1); } : undefined} attachments={stagedFiles} onRemoveAttachment={(index) => setStagedFiles((items) => items.filter((_, position) => position !== index))} modelControls={modelControls} modelStatus={modelStatus} stopControl={canOperate && hasCapability(user, "task_controls") && ((visibleLiveTurn?.state === "running" && !!visibleLiveTurn.turnId) || liveJobs.length > 0) ? { requested: stoppingFlu, onStop: () => void stopFlu() } : undefined} disabled={!canOperate || !session.freeMessagesEnabled || busy} attachDisabled={!canOperate || busy || !hasCapability(user, "attachments_multiple")} label="Mensaje para Flu3nce" placeholder={!canWrite ? "Este chat está compartido contigo en modo lectura" : session.freeMessagesEnabled ? "Escribe lo que quieras explorar…" : "Los mensajes libres aún no están habilitados"} /></div>
+                {showScrollBottom ? <button type="button" onClick={scrollToChatBottom} className={`flu-chat-scroll-bottom ${newReplyBelow ? "has-new-reply" : ""}`} aria-label={newReplyBelow ? "Nueva respuesta de Flu3nce: ir al final" : "Ir al final de la conversación"} title={newReplyBelow ? "Nueva respuesta de Flu3nce" : "Ir al final de la conversación"}><ArrowDown aria-hidden="true" />{newReplyBelow ? <span className="flu-chat-scroll-unread" aria-hidden="true" /> : null}</button> : null}
+                <div className="flu-composer-area shrink-0 px-4 py-4 sm:px-8">{visibleUploadBatches.map((record) => <ChatUploadBatch key={record.id} record={record} manager={uploadManager} />)}<ChatComposer id="flu-chat-message" submitDisabled={!!activeUploadBatch} uploadControl={activeUploadBatch ? () => void uploadManager.cancel(activeUploadBatch.id) : undefined} value={draft} onChange={setDraft} onSubmit={send} onAttach={() => sourceInput.current?.click()} onOpenLibrary={!isMockMode && !session.chat.unassigned ? () => { closePreview(); closeMemory(); setContextOpen(true); setOpenLibrarySignal((value) => value + 1); } : undefined} attachments={stagedFiles} onRemoveAttachment={(index) => setStagedFiles((items) => items.filter((_, position) => position !== index))} modelControls={modelControls} modelStatus={modelStatus} stopControl={canOperate && hasCapability(user, "task_controls") && ((visibleLiveTurn?.state === "running" && !!visibleLiveTurn.turnId) || liveJobs.length > 0) ? { requested: stoppingFlu, onStop: () => void stopFlu() } : undefined} disabled={!canOperate || !session.freeMessagesEnabled} sendBlocked={busy} attachDisabled={!canOperate || busy || !hasCapability(user, "attachments_multiple")} label="Mensaje para Flu3nce" placeholder={!canWrite ? "Este chat está compartido contigo en modo lectura" : session.freeMessagesEnabled ? "Escribe lo que quieras explorar…" : "Los mensajes libres aún no están habilitados"} /></div>
             </> : <div aria-label="Cargando chat" aria-busy="true" className="flu-chat-loading flex-1 px-4 py-8 sm:px-8"><div className="mx-auto max-w-3xl space-y-5"><div className="flu-chat-skeleton ml-auto h-12 w-1/2 rounded-2xl" /><div className="flu-chat-skeleton h-20 w-3/4 rounded-2xl" /><div className="flu-chat-skeleton ml-auto h-12 w-2/3 rounded-2xl" /><span className="sr-only">Cargando conversación…</span></div></div>}
         </section>
 
@@ -975,7 +979,7 @@ export const FluChatsPage = () => {
         />
         {(openedDeliverable || openedSource) && session ? <aside ref={deliverablePanel} aria-label={openedSource ? `Vista de ${openedSource.name}` : `Vista de ${cardTitle(openedDeliverable!.card)}`} className={`flu-deliverable-panel ${openedSource ? "is-source-panel" : ""} ${panelMaximized ? "is-maximized" : ""}`} style={{ "--flu-panel-width": `${visiblePanelWidth}px` } as CSSProperties}>
             {!panelMaximized ? <FluResizeHandle label="Ajustar ancho del panel de entregables" value={visiblePanelWidth} min={Math.min(360, maxPanelWidth)} max={maxPanelWidth} direction={-1} onChange={setPanelWidth} /> : null}
-            <header className="flu-deliverable-panel-header"><div><p>{openedSource ? "ARCHIVO DEL CHAT" : "ENTREGABLE"}</p><h2 title={openedSource?.name}>{openedSource?.name ?? cardTitle(openedDeliverable!.card)}</h2></div><div className="flu-deliverable-panel-actions"><button type="button" onClick={() => setPanelMaximized((value) => !value)} aria-label={panelMaximized ? "Restaurar panel" : "Pantalla completa"} title={panelMaximized ? "Restaurar panel" : "Pantalla completa"}>{panelMaximized ? "⤢" : "⛶"}</button><button type="button" onClick={closePreview} aria-label="Cerrar panel">×</button></div></header>
+            <header className="flu-deliverable-panel-header"><div><p>{openedSource ? "ARCHIVO DEL CHAT" : "ENTREGABLE"}</p><h2 title={openedSource?.name}>{openedSource?.name ?? cardTitle(openedDeliverable!.card)}</h2></div><div className="flu-deliverable-panel-actions"><button type="button" onClick={() => setPanelMaximized((value) => !value)} aria-label={panelMaximized ? "Restaurar panel" : "Pantalla completa"} title={panelMaximized ? "Restaurar panel" : "Pantalla completa"}>{panelMaximized ? <Minimize01 aria-hidden="true" /> : <Maximize01 aria-hidden="true" />}</button><button type="button" onClick={closePreview} aria-label="Cerrar panel">×</button></div></header>
             <div className="flu-deliverable-panel-content is-source-viewer">{openedSource ? <FluSourcePreview source={openedSource} projectId={session.chat.projectId} /> : openedDeliverable ? <ConsultationDeliverableCard key={`${openedDeliverable.card.deliverableId}-${openedDeliverable.card.version?.id ?? "pending"}`} card={openedDeliverable.card} projectId={session.chat.projectId} unitId={openedDeliverable.unitId} initiallyExpanded fullPreview /> : null}</div>
         </aside> : null}
         {moveOpen ? <FluMoveChatDialog
