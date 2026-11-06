@@ -108,6 +108,8 @@ export const mockGetChat = (id: string, cursor?: string, since?: string): ChatSe
     const chronological = since ? record.messages.slice(index + 1) : cursor ? [] : record.messages;
     return clone({ chat: record.chat, messages: [...chronological].reverse(), pendingIntentIds: record.messages.filter((item) => item.intent?.state === "pending").map((item) => item.intent!.id), freeMessagesEnabled: true, revisionIntentsEnabled: true });
 };
+/** Respuesta con tabla en el chat, sin crear entregable (demo local). */
+const MOCK_TABLE_REPLY = "Con lo que hay en este chat, así quedan los responsables del proceso:\n\n| Paso | Responsable | Aprueba |\n| --- | --- | --- |\n| Solicitar la compra | Área usuaria | Jefe del área |\n| Cotizar con proveedores | Compras | — |\n| Autorizar el pago | Finanzas | Dirección, si pasa de $50,000 |\n\n**Esta respuesta es de la demo local, no del modelo real.**";
 export const mockSendChatMessage = (id: string, text: string, clientMessageId: string): { userMessage: ConsultationMessage; reply: ConsultationMessage } => {
     const record = must(id);
     const existing = record.messages.find((message) => message.id === clientMessageId);
@@ -138,7 +140,7 @@ export const mockSendChatMessage = (id: string, text: string, clientMessageId: s
             record.awaiting = type;
             reply = add(record, "flu", "clarification", `Claro. Para preparar ${typeLabel[type] ?? "el entregable"}, ¿cuál es el objetivo y qué reglas o pasos debemos respetar?`, { clarification: { prompt: "Cuéntame el objetivo y el alcance.", suggestions: ["Aplica a compras menores a $10,000; Dirección aprueba y Finanzas registra."] } });
         } else {
-            reply = add(record, "flu", "text", lower.trim() === "hola" ? "Hola. Podemos explorar tu proceso, usar fuentes o preparar un entregable cuando tengamos contexto suficiente. ¿Qué te gustaría trabajar?" : "Te sigo. Para aterrizarlo en un entregable de consultoría, cuéntame el proceso, el objetivo o la decisión que quieres documentar. También puedes adjuntar una fuente. **Esta respuesta es de la demo local, no del modelo real.**");
+            reply = add(record, "flu", "text", lower.trim() === "hola" ? "Hola. Podemos explorar tu proceso, usar fuentes o preparar un entregable cuando tengamos contexto suficiente. ¿Qué te gustaría trabajar?" : /\btabla\b/.test(lower) ? MOCK_TABLE_REPLY : "Te sigo. Para aterrizarlo en un entregable de consultoría, cuéntame el proceso, el objetivo o la decisión que quieres documentar. También puedes adjuntar una fuente. **Esta respuesta es de la demo local, no del modelo real.**");
         }
     }
     return clone({ userMessage, reply });

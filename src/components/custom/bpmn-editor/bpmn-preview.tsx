@@ -32,7 +32,7 @@ export function BpmnPreview({ xml, className, controls = false }: { xml: string;
         let disposed = false;
         let resizeObserver: ResizeObserver | undefined;
         const fit = () => {
-            const canvas = viewer.get("canvas") as any;
+            const canvas = viewer.get("canvas") as { resized: () => void; zoom: (level: string, center?: { x: number; y: number }) => void };
             canvas.resized();
             // `fit-viewport` sin segundo argumento alinea el origen arriba/izquierda.
             // Un centro explícito conserva todo el diagrama y reparte el aire sobrante.

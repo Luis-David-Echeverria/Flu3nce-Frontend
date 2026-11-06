@@ -36,3 +36,7 @@ cookies.txt
 
 # Windows null device (causes git mmap errors)
 nul
+
+# Pruebas en navegador
+/test-results/
+/playwright-report/

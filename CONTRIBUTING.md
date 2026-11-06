@@ -4,7 +4,7 @@
 
 1. Parte de `main` actualizado y crea una rama con un nombre que diga qué cambia: `diseno/compositor-adjuntos`, `fix/stream-reconexion`, `feat/visor-pptx`.
 2. Haz commits pequeños con el mensaje en español, en imperativo y explicando el porqué: «Mostrar la versión en las tarjetas antiguas para no confundirlas con la vigente».
-3. Antes de abrir el PR, corre `npm run verify:production` y asegúrate de que pase completo.
+3. Antes de abrir el PR, corre `npm run verify:production` y asegúrate de que pase completo. Si tocaste la interfaz, corre también `npm run test:e2e`: deja capturas en claro, oscuro y 390 px en `test-results/`.
 4. Abre el PR hacia `main` y llena la plantilla. Si toca la interfaz, adjunta capturas en claro, en oscuro y a 390 px de ancho.
 5. Se integra cuando la verificación de GitHub está en verde y alguien más lo revisó.
 

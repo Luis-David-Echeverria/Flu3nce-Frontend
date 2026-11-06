@@ -29,8 +29,10 @@ Sin el submódulo `contract` no corren `check:contract-pin`, `check:api-schema` 
 | --- | --- |
 | Cambiar colores, radios, tipografía o animaciones | `src/styles/theme.css`, `src/styles/globals.css` |
 | Cambiar el aspecto del chat o los paneles | `src/pages/flu-chats.css` |
-| La pantalla principal | `src/pages/flu-chats.tsx` |
-| El compositor | `src/pages/chat-composer.tsx` |
+| La pantalla principal | `src/pages/flu-chats.tsx` (estado); piezas en `flu-chat-sidebar.tsx`, `flu-chat-message.tsx`, `flu-chat-context.tsx`, `flu-chat-dialogs.tsx` |
+| El compositor y su borrador | `src/pages/chat-composer.tsx`, `src/hooks/use-chat-draft.ts` |
+| Copiar respuestas y tablas | `src/pages/chat-copy-message.tsx`, `src/components/custom/chat-table.tsx`, `src/lib/table-export.ts` |
+| Recorridos en navegador | `e2e/*.spec.ts`, `playwright.config.ts` |
 | La actividad y los trabajos | `src/pages/chat-activity.tsx`, `chat-job-activity.tsx`, `chat-*-state.ts` |
 | Tarjetas y visor de entregables | `src/components/custom/consultation-deliverable-card.tsx`, `deliverable-content-view.tsx` |
 | Llamadas al API | `src/services/v2/*` |

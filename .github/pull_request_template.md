@@ -5,6 +5,7 @@
 ## Cómo se probó
 
 - [ ] `npm run verify:production` pasa completo
+- [ ] `npm run test:e2e` pasa (si toca la interfaz)
 - [ ] Probado en `npm run dev:mock` o contra el API real (indica cuál)
 
 ## Interfaz
