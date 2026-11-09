@@ -967,7 +967,7 @@ export const FluChatsPage = () => {
             sourcesError={sourcesError}
             onOpenSource={openSource}
             onLoadMoreSources={() => void run(async () => { const page = await listChatSources(chatId, sourcesCursor); setSources((current) => [...current, ...page.sources.filter((next) => !current.some((item) => item.id === next.id))]); setSourcesCursor(page.nextCursor); }, "No se pudieron cargar más fuentes.")}
-            sourceTools={session && !isMockMode ? <FluSourceTools chatId={session.chat.id} projectId={session.chat.projectId} unassigned={session.chat.unassigned} canWrite={canWrite && (!selectedProject || selectedProject.rol !== "lector")} sources={orderedSources} openLibrarySignal={openLibrarySignal} onSourcesChanged={async () => { const page = await listChatSources(session.chat.id); setSources(page.sources); setSourcesCursor(page.nextCursor); await refreshChat(); }} /> : null}
+            sourceTools={session && !isMockMode ? <FluSourceTools chatId={session.chat.id} projectId={session.chat.projectId} unassigned={session.chat.unassigned} canWrite={canWrite && (!selectedProject || selectedProject.rol !== "lector")} openLibrarySignal={openLibrarySignal} onSourcesChanged={async () => { const page = await listChatSources(session.chat.id); setSources(page.sources); setSourcesCursor(page.nextCursor); await refreshChat(); }} /> : null}
             deliverables={visibleDeliverables}
             onOpenDeliverable={openDeliverable}
             busy={busy}

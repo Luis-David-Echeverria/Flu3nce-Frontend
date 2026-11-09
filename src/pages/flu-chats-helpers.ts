@@ -39,6 +39,7 @@ export function visibleMessageText(item: ChatMessage): string {
     if (intent.state === "dismissed") return "Propuesta descartada.";
     if (intent.state === "confirmed") return "Propuesta confirmada.";
     if (intent.state === "expired") return "Esta propuesta ya venció.";
+    if (intent.state === "pending") return confirmationReason(intent) ? "Para continuar falta tu confirmación." : "Esta tarea no se ejecutó: quedó esperando una confirmación que ya no se usa.";
     if (intent.intentKind === "save_context") return "Te propongo guardar este dato para tenerlo en cuenta después.";
     if (intent.intentKind === "revise_deliverable") return "Te propongo un cambio al entregable.";
     if (intent.intentKind === "generate" || !intent.intentKind) return `Te propongo preparar ${types || "el entregable"}.`;
@@ -59,7 +60,7 @@ export function chatErrorForUser(error: unknown, fallback: string): string {
         case "question_group_closed": return "Esa ronda ya se cerró. Actualiza el chat para ver las preguntas vigentes.";
         case "consultation_disabled": return "El chat todavía no está habilitado para esta cuenta.";
         case "provider_unavailable": return "El servicio de conversación no está disponible en este momento. Inténtalo de nuevo más tarde.";
-        case "source_not_permitted": return error.message?.trim() || "Una fuente necesita permiso para el proveedor indicado. Revisa los permisos del archivo y vuelve a intentarlo.";
+        case "source_not_permitted": return error.message?.trim() || "Un archivo no se pudo enviar al proveedor que hace este trabajo.";
         case "model_not_available": return "El modelo elegido dejó de estar disponible. Selecciona uno de los modelos habilitados y vuelve a pedirlo; no se cambió de modelo a escondidas.";
         case "job_not_pausable": return "Este trabajo ya no se puede pausar. Actualiza su estado.";
         case "job_not_resumable": return "Este trabajo ya no se puede reanudar. Actualiza su estado.";
@@ -67,4 +68,25 @@ export function chatErrorForUser(error: unknown, fallback: string): string {
         case "internal_error": return fallback;
         default: return error.message?.trim() || fallback;
     }
+}
+
+const CONFIRMATION_REASONS: Record<string, string> = {
+    external_cost: "Usa un servicio externo con coste, como Gamma para presentaciones.",
+    manual_version_conflict: "Sustituiría una versión editada a mano.",
+    affects_others: "Afecta a otras personas, por ejemplo al compartir o invitar.",
+    provider_permission: "Enviaría un archivo a un proveedor que no tiene permiso para él.",
+    irreversible_delete: "Borraría algo que no se puede recuperar.",
+    scope_expansion: "Haría más de lo que pediste.",
+};
+
+/**
+ * Por qué una acción SÍ necesita confirmación, o `null` si no la necesita. Lo pedido se
+ * ejecuta sin propuesta; solo esperan los motivos del contrato (`reason`) y el freno de
+ * Gamma, que el backend mantiene para las presentaciones aunque todavía no envíe el motivo.
+ */
+export function confirmationReason(intent: ChatIntent): string | null {
+    if (intent.reason) return CONFIRMATION_REASONS[intent.reason] ?? "Esta acción necesita tu confirmación antes de continuar.";
+    const types = [...(intent.deliverableTypes ?? []), ...(intent.destinations?.flatMap((destination) => destination.deliverableTypes) ?? [])];
+    if (intent.intentKind !== "save_context" && types.includes("presentation")) return CONFIRMATION_REASONS.external_cost;
+    return null;
 }

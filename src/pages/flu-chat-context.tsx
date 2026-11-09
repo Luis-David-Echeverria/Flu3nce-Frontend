@@ -21,7 +21,7 @@ type Props = {
     sourcesError: string | null;
     onOpenSource: (source: Source) => void;
     onLoadMoreSources: () => void;
-    /** Herramientas de fuentes del chat (biblioteca y permisos), si aplican. */
+    /** Herramientas de fuentes del chat (biblioteca del proyecto), si aplican. */
     sourceTools?: ReactNode;
     deliverables: ChatMessage[];
     onOpenDeliverable: (card: Card, unitId: string) => void;

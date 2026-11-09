@@ -1530,43 +1530,6 @@
     list-style: disc;
 }
 
-.flu-chat-permissions {
-    margin-top: 10px;
-    border: 1px solid var(--fl-warning-bg);
-    border-radius: 16px;
-    padding: 12px 14px;
-    background: var(--fl-warning-bg);
-    color: var(--fl-warning-text);
-    font-size: 13px;
-    line-height: 1.6;
-}
-.flu-chat-permissions ul {
-    display: grid;
-    gap: 8px;
-    margin-top: 8px;
-}
-.flu-chat-permissions li {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-}
-.flu-chat-permissions li span {
-    flex: 1;
-    min-width: 140px;
-    overflow-wrap: anywhere;
-}
-.flu-chat-permissions button {
-    flex: none;
-    border: 1px solid currentColor;
-    border-radius: 999px;
-    padding: 6px 12px;
-    background: var(--fl-bg);
-    font-weight: 600;
-}
-.flu-chat-permissions button:disabled {
-    opacity: 0.5;
-}
 
 /* Ir al final */
 .flu-main {
@@ -2278,18 +2241,6 @@
 .flu-memory-setting button,
 .flu-memory-actions button,
 .flu-memory-confirm button,
-.flu-source-permission-item button,
-.flu-source-permission-confirm button,
-.flu-source-library-item button {
-    flex: none;
-    border: 1px solid var(--fl-border);
-    border-radius: 999px;
-    padding: 6px 12px;
-    background: var(--fl-bg);
-    color: var(--fl-text-2);
-    font-size: 12px;
-    font-weight: 600;
-}
 .flu-memory-setting button:hover,
 .flu-memory-actions button:hover,
 .flu-source-library-item button:hover {
@@ -2332,28 +2283,8 @@
     white-space: nowrap;
 }
 .flu-memory-confirm,
-.flu-source-permission-confirm {
-    margin-top: 10px;
-    border: 1px solid var(--fl-error-border);
-    border-radius: 14px;
-    padding: 10px 12px;
-    background: var(--fl-error-bg);
-    color: var(--fl-error-text);
-    font-size: 12px;
-}
 .flu-memory-confirm button,
-.flu-source-permission-confirm button {
-    margin: 8px 7px 0 0;
-}
 .flu-source-library-item,
-.flu-source-permission-item {
-    margin-top: 8px;
-    border: 1px solid var(--fl-divider);
-    border-radius: 14px;
-    padding: 8px 10px;
-    background: var(--fl-bg);
-    font-size: 12px;
-}
 .flu-source-library-item {
     display: flex;
     align-items: center;
@@ -2365,22 +2296,6 @@
     min-width: 0;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-.flu-source-permission-item > button {
-    width: 100%;
-    overflow-wrap: anywhere;
-    text-align: left;
-}
-.flu-source-permission-item ul {
-    display: grid;
-    gap: 5px;
-    margin-top: 8px;
-}
-.flu-source-permission-item li {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 5px;
 }
 
 /* ── Visor de entregables y archivos (riel adyacente) ───────────────────── */
