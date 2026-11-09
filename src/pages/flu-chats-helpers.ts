@@ -11,6 +11,8 @@ export type ChatIntent = GenerationIntent & {
 };
 
 export class ChatUserError extends Error {}
+/** Un fallo que la respuesta en curso ya muestra: no se repite como aviso aparte. */
+export class ShownInTurnError extends Error {}
 
 export function messageDate(value: string) {
     return new Date(value).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" });
@@ -65,6 +67,9 @@ export function chatErrorForUser(error: unknown, fallback: string): string {
         case "job_not_pausable": return "Este trabajo ya no se puede pausar. Actualiza su estado.";
         case "job_not_resumable": return "Este trabajo ya no se puede reanudar. Actualiza su estado.";
         case "job_control_via_parent": return "Controla el paquete completo desde su trabajo principal.";
+        case "external_timeout": return error.message?.trim() || "El servicio externo no respondió a tiempo. Lo que ya estaba hecho se conserva; puedes volver a pedirlo.";
+        case "conversion_timeout": return error.message?.trim() || "La conversión del archivo no terminó a tiempo. Puedes volver a pedirla.";
+        case "turn_exhausted": return error.message?.trim() || "Flu3nce llegó al límite de pasos de esta respuesta sin terminar. Lo ya hecho se conserva; puedes pedirle que continúe.";
         case "internal_error": return fallback;
         default: return error.message?.trim() || fallback;
     }

@@ -1316,6 +1316,7 @@
     flex: 1;
     min-width: 0;
     font-weight: 500;
+    overflow-wrap: anywhere;
 }
 .flu-chat-activity.is-active .flu-chat-activity-label {
     color: var(--fl-text);
@@ -1386,6 +1387,7 @@
     align-items: baseline;
     gap: 8px;
     font-size: 13px;
+    overflow-wrap: anywhere;
 }
 .flu-chat-activity li > span:first-child {
     color: var(--fl-text-4);
@@ -2703,7 +2705,16 @@
 }
 .flu-open-file-toolbar > div {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 6px;
+}
+.flu-open-file-note {
+    color: var(--fl-text-4);
+    font-size: 12px;
+}
+.flu-context-scope {
+    margin-top: 16px;
 }
 .flu-open-file-toolbar button {
     border: 1px solid var(--fl-border);

@@ -65,7 +65,7 @@ export function reduceLiveTurn(current: LiveTurn, event: ChatStreamEvent, now = 
     }
     if (event.event === "message") {
         const exchange = data as unknown as components["schemas"]["ConsultationExchange"];
-        return { ...next, replyId: exchange.reply?.id, userMessageId: exchange.userMessage?.id, requestId: exchange.nucleo?.requestId, outcome: exchange.outcome, failure: exchange.failure, permissionsPending: exchange.permissionsPending, jobIds: exchange.reply?.refs?.jobId ? [exchange.reply.refs.jobId] : [] };
+        return { ...next, replyId: exchange.reply?.id, userMessageId: exchange.userMessage?.id, requestId: exchange.nucleo?.requestId, outcome: exchange.outcome, failure: exchange.failure, permissionsPending: exchange.permissionsPending, jobIds: [...new Set([...(exchange.reply?.refs?.jobIds ?? []), ...(exchange.reply?.refs?.jobId ? [exchange.reply.refs.jobId] : [])])] };
     }
     if (event.event === "done" || event.event === "cancelled") {
         const cancelled = event.event === "cancelled";

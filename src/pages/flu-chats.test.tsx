@@ -154,7 +154,7 @@ describe("pantalla de chats QA", () => {
         expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
 
-    it("conserva el texto si la única parte guardada es la actividad y la deja plegada al final", async () => {
+    it("conserva el texto si la única parte guardada es la actividad y la deja plegada antes de la respuesta", async () => {
         getChat.mockResolvedValue({ chat, freeMessagesEnabled: true, messages: [{ id: "reply", createdAt: "2026-10-15T10:00:00Z", role: "flu", kind: "text", text: "Respuesta completa.", parts: [{ kind: "activity_group", activityGroup: { collapsed: true, items: [{ label: "Generando archivo", kind: "generating_file", state: "done", ms: 1500 }] } }] }] });
         render(<MemoryRouter initialEntries={["/flu?chat=chat_1"]}><FluChatsPage /></MemoryRouter>);
         expect(await screen.findByText("Respuesta completa.")).toBeInTheDocument();

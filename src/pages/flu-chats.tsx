@@ -66,7 +66,7 @@ import { FluSourceTools } from "./flu-source-tools";
 import { FluSourcePreview } from "./flu-source-preview";
 import "./flu-chats.css";
 import { ChatIcon, ContextIcon, EditIcon, FolderIcon } from "./flu-chats-icons";
-import { ChatUserError, cardTitle, chatErrorForUser, type ChatMessage } from "./flu-chats-helpers";
+import { ChatUserError, ShownInTurnError, cardTitle, chatErrorForUser, type ChatMessage } from "./flu-chats-helpers";
 
 /** Interfaz conversacional sobre el contrato real /chats. */
 export const FluChatsPage = () => {
@@ -521,7 +521,8 @@ export const FluChatsPage = () => {
         setNotice(null);
         try { await work(); }
         catch (caught) {
-            setError(chatErrorForUser(caught, fallback));
+            // Lo que ya se ve en la respuesta en curso (fallo o conexión interrumpida) no se repite arriba.
+            if (!(caught instanceof ShownInTurnError)) setError(chatErrorForUser(caught, fallback));
             if (caught instanceof ApiServiceError && caught.code === "model_not_available") {
                 void refreshModels();
             }
@@ -533,8 +534,8 @@ export const FluChatsPage = () => {
     const rememberExchange = (targetChatId: string, exchange: ChatExchange) => {
         if (activeChatId.current !== targetChatId || !exchange.reply?.id) return;
         setExchangeMetadata((current) => ({ ...current, [exchange.reply.id]: { requestId: exchange.nucleo?.requestId, failure: exchange.failure, permissionsPending: exchange.permissionsPending } }));
-        const jobId = exchange.reply.refs?.jobId ?? exchange.reply.intent?.jobId;
-        if (jobId) setAnnouncedJobs((current) => new Set(current).add(jobId));
+        const jobIds = [...(exchange.reply.refs?.jobIds ?? []), exchange.reply.refs?.jobId ?? exchange.reply.intent?.jobId].filter((jobId): jobId is string => !!jobId);
+        if (jobIds.length) setAnnouncedJobs((current) => new Set([...current, ...jobIds]));
     };
 
     const sendPrompt = async (targetChatId: string, prompt: string, attachmentIds: string[] = []) => {
@@ -584,7 +585,8 @@ export const FluChatsPage = () => {
                 if (controller.signal.aborted && connection.cancellationConfirmed) return { cancelled: true as const, turnId: connection.turnId ?? "" };
                 updateLiveTurn((current) => current?.clientMessageId === id && !["cancelled", "failed"].includes(current.state) ? { ...current, state: "interrupted" } : current);
                 if (activeChatId.current === targetChatId) void refreshChat();
-                throw error;
+                const shown = liveTurnRef.current?.clientMessageId === id && (liveTurnRef.current.state === "interrupted" || (liveTurnRef.current.state === "failed" && !!liveTurnRef.current.failure));
+                throw shown ? new ShownInTurnError(error instanceof Error ? error.message : "") : error;
             } finally { if (turnConnection.current?.clientMessageId === id) turnConnection.current = null; }
             streamEnabled.current = false;
         }
@@ -647,9 +649,9 @@ export const FluChatsPage = () => {
             clearSentFirstMessage(scope, prompt);
             setStagedFiles([]);
 
-        } catch {
+        } catch (caught) {
             restoreSentDraft(`chat:${chat.id}`, prompt);
-            setError("El chat se creó, pero no se completó el envío. Revisa los archivos del chat antes de reintentar.");
+            if (!(caught instanceof ShownInTurnError)) setError("El chat se creó, pero no se completó el envío. Revisa los archivos del chat antes de reintentar.");
         }
         await getChat(chat.id).then((next) => { latestMessageId.current = next.messages[0]?.id; setSession(next); }).catch(() => undefined);
     }, "No se pudo iniciar la conversación.");
@@ -729,8 +731,9 @@ export const FluChatsPage = () => {
                     }
                 }
             }
+            let externalContinues = false;
             for (const id of ids) if (!stopped.has(id)) {
-                try { await cancelJob(id); }
+                try { const result = await cancelJob(id); if (result.effect === "cancelled_external_continues") externalContinues = true; }
                 catch (error) {
                     if (error instanceof ApiServiceError && error.code === "job_control_via_parent" && typeof (error.detail as { parentJobId?: string })?.parentJobId === "string") {
                         const parent = (error.detail as { parentJobId: string }).parentJobId;
@@ -738,7 +741,7 @@ export const FluChatsPage = () => {
                     } else if (!(error instanceof ApiServiceError && error.code === "job_not_cancellable")) throw error;
                 }
             }
-            setNotice(alreadyFinished && !ids.length ? "La respuesta ya había terminado." : saved ? `Flu3nce se detuvo. ${saved} ${saved === 1 ? "versión ya estaba guardada y se conserva" : "versiones ya estaban guardadas y se conservan"}.` : "Flu3nce se detuvo.");
+            setNotice(externalContinues ? "Flu3nce se detuvo. El servicio externo puede terminar su parte, pero el resultado no se va a publicar." : alreadyFinished && !ids.length ? "La respuesta ya había terminado." : saved ? `Flu3nce se detuvo. ${saved} ${saved === 1 ? "versión ya estaba guardada y se conserva" : "versiones ya estaban guardadas y se conservan"}.` : "Flu3nce se detuvo.");
             await refreshChat();
         } catch (error) {
             setStoppedJobs((current) => new Set([...current].filter((id) => !ids.includes(id))));

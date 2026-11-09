@@ -63,7 +63,7 @@ export function ChatJobActivity({ jobId, chatId, messages, projectId, canOperate
         {verifiedJob ? <ChatJobDetails job={verifiedJob} /> : null}
         {renderCards ? cards.map((item) => item.unitId ? <div key={`${item.deliverableCard!.deliverableId}-${item.deliverableCard!.version?.id ?? "pending"}`} className="flu-activity-deliverable"><ConsultationDeliverableCard card={item.deliverableCard!} projectId={projectId} unitId={item.unitId} onOpenPanel={onOpenDeliverable ? () => onOpenDeliverable(item.deliverableCard!, item.unitId!) : undefined} /></div> : null) : null}
         {verifiedJob?.error?.retryable !== false ? cards.filter((item) => item.deliverableCard?.retryIntentId).map((item) => canOperate ? <button key={`retry-${item.deliverableCard!.deliverableId}`} type="button" disabled={busy} onClick={() => onRetry(item.deliverableCard!.retryIntentId!)} className="flu-activity-retry">Reintentar {deliverableLabel(item.deliverableCard!.deliverableType)}</button> : null) : null}
-        {verifiedJob?.error?.retryable !== false && failure?.safeAction === "retry" && failure.retryIntentId && canOperate ? <button type="button" disabled={busy} onClick={() => onRetry(failure.retryIntentId!)} className="flu-activity-retry">Reintentar</button> : null}
+        {verifiedJob?.error?.retryable !== false && failure?.safeAction === "retry" && failure.retryIntentId && !cards.some((item) => item.deliverableCard?.retryIntentId === failure.retryIntentId) && canOperate ? <button type="button" disabled={busy} onClick={() => onRetry(failure.retryIntentId!)} className="flu-activity-retry">Reintentar</button> : null}
         {showReferences && referenceMessage ? <ChatReference chatId={chatId} messageId={referenceMessage.id} jobId={jobId} /> : null}
     </article>;
 }

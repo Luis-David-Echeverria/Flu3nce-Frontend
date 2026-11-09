@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { ApiServiceError } from "@/services/v2/http";
 import { forgetMemory, getMemorySettings, listMemories, setMemoryPaused, type Memory, type MemorySettings } from "@/services/v2/memories";
@@ -23,18 +23,26 @@ export function FluMemoryPanel({ onClose }: { onClose: () => void }) {
         return () => { document.removeEventListener("keydown", onKeyDown); previousFocus?.focus(); };
     }, [onClose]);
 
+    const active = useRef(true);
+    const load = useCallback(() => Promise.all([listMemories(), getMemorySettings()]).then(([page, nextSettings]) => {
+        if (!active.current) return;
+        setMemories(page.memories);
+        setCursor(page.nextCursor);
+        setSettings(nextSettings);
+        setError("");
+    }).catch((caught) => {
+        if (active.current) setError(caught instanceof ApiServiceError && caught.code === "memory_not_available" ? "La memoria aún no está habilitada para esta cuenta." : "No se pudo cargar la memoria.");
+    }).finally(() => { if (active.current) setLoading(false); }), []);
+
+    // Los recuerdos se forman solos mientras conversas: el panel se pone al día mientras está abierto.
     useEffect(() => {
-        let active = true;
-        void Promise.all([listMemories(), getMemorySettings()]).then(([page, nextSettings]) => {
-            if (!active) return;
-            setMemories(page.memories);
-            setCursor(page.nextCursor);
-            setSettings(nextSettings);
-        }).catch((caught) => {
-            if (active) setError(caught instanceof ApiServiceError && caught.code === "memory_not_available" ? "La memoria aún no está habilitada para esta cuenta." : "No se pudo cargar la memoria.");
-        }).finally(() => { if (active) setLoading(false); });
-        return () => { active = false; };
-    }, []);
+        active.current = true;
+        void load();
+        const refresh = () => { if (!document.hidden) void load(); };
+        const timer = window.setInterval(refresh, 30000);
+        document.addEventListener("visibilitychange", refresh);
+        return () => { active.current = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
+    }, [load]);
 
     const pause = async () => {
         if (!settings || busy) return;
@@ -61,10 +69,10 @@ export function FluMemoryPanel({ onClose }: { onClose: () => void }) {
     return <aside ref={panel} role="complementary" aria-label="Memoria privada" className="flu-deliverable-panel flu-memory-panel">
         <header className="flu-deliverable-panel-header"><div><p>MEMORIA PRIVADA</p><h2>Lo que recuerdas entre chats</h2></div><button type="button" onClick={onClose} aria-label="Cerrar memoria">×</button></header>
         <div className="flu-deliverable-panel-content">
-            <p className="flu-memory-help">Estos recuerdos son frases tuyas no verificadas. No se convierten en datos del proyecto ni se comparten con otros usuarios.</p>
+            <p className="flu-memory-help">Tu memoria personal te acompaña en todos tus chats y proyectos. Flu3nce la forma sola con lo que conviene recordar; son frases tuyas no verificadas, no se convierten en datos del proyecto y no las ve nadie más.</p>
             {loading ? <p role="status" className="flu-memory-help">Cargando memoria…</p> : null}
             {error ? <p role="alert" className="flu-memory-error">{error}</p> : null}
-            {settings ? <div className="flu-memory-setting"><div><strong>Guardar nuevos recuerdos</strong><p>{settings.paused ? "En pausa. Lo ya guardado sigue usándose." : "Activo. Puedes pausar el guardado en cualquier momento."}</p></div><button type="button" onClick={() => void pause()} disabled={busy}>{settings.paused ? "Reanudar" : "Pausar"}</button></div> : null}
+            {settings ? <div className="flu-memory-setting"><div><strong>Memoria entre chats</strong><p>{settings.paused ? "En pausa: Flu3nce no guarda nada nuevo ni usa lo guardado. Puedes verlo y olvidarlo." : "Activa: Flu3nce guarda lo que conviene recordar y lo usa en tus chats. Puedes pausarla cuando quieras."}</p></div><button type="button" onClick={() => void pause()} disabled={busy}>{settings.paused ? "Reanudar" : "Pausar"}</button></div> : null}
             {!loading && settings && !memories.length ? <p className="flu-memory-help">Aún no hay recuerdos guardados.</p> : null}
             <ul className="flu-memory-list">{memories.map((memory) => <li key={memory.id}>
                 <p>{memory.text}</p><small>No verificado · {memory.scope === "personal" ? "Personal" : memory.scope === "project" ? "Este proyecto" : "Este chat"}</small>
