@@ -77,3 +77,21 @@ test("lo pedido se genera sin botón de confirmar y deja el entregable en el cha
     expect(errors).toEqual([]);
 });
 
+
+for (const view of [{ name: "bienvenida-claro", width: 1280, dark: false }, { name: "bienvenida-oscuro", width: 1280, dark: true }, { name: "bienvenida-390", width: 390, dark: false }]) {
+    test(`la bienvenida ofrece todas las capacidades (${view.name})`, async ({ page }, testInfo) => {
+        const errors = watchErrors(page);
+        if (view.dark) await page.addInitScript(() => window.localStorage.setItem("ui-theme", "dark"));
+        await page.setViewportSize({ width: view.width, height: 844 });
+        await page.goto("/flu");
+        await expect(page.getByRole("heading", { name: "¿Qué quieres trabajar hoy?" })).toBeVisible();
+        const capabilities = page.getByRole("group", { name: "Lo que Flu3nce puede hacer contigo" }).getByRole("button");
+        await expect(capabilities).toHaveCount(9);
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+        expect(overflow).toBeLessThanOrEqual(0);
+        await capture(page, testInfo, view.name);
+        await capabilities.filter({ hasText: "Ayúdame a traducir un documento" }).click();
+        await expect(page.getByLabel("Tu primer mensaje")).toHaveValue("Ayúdame a traducir un documento");
+        expect(errors).toEqual([]);
+    });
+}

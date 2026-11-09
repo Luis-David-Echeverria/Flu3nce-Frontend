@@ -751,8 +751,8 @@
     min-height: 76px;
 }
 .flu-suggestions {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
     gap: 8px;
     order: 4;
     width: 100%;
@@ -782,6 +782,21 @@
 }
 .flu-suggestions span {
     display: none;
+}
+.flu-suggestions button {
+    gap: 9px;
+    padding-block: 8px;
+    line-height: 1.3;
+}
+.flu-suggestions button:focus-visible {
+    outline: 2px solid var(--fl-primary);
+    outline-offset: 2px;
+}
+.flu-suggestions svg {
+    width: 17px;
+    height: 17px;
+    flex: none;
+    color: var(--fl-primary-text);
 }
 
 /* ── Conversación ───────────────────────────────────────────────────────── */

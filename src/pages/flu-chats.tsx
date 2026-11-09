@@ -65,7 +65,8 @@ import { FluChatContext } from "./flu-chat-context";
 import { FluSourceTools } from "./flu-source-tools";
 import { FluSourcePreview } from "./flu-source-preview";
 import "./flu-chats.css";
-import { ChatIcon, ContextIcon, EditIcon, FolderIcon } from "./flu-chats-icons";
+import { ChatIcon, ContextIcon, DeliverableTypeIcon, EditIcon, FolderIcon } from "./flu-chats-icons";
+import { WELCOME_CAPABILITIES } from "./flu-capabilities";
 import { ChatUserError, ShownInTurnError, cardTitle, chatErrorForUser, type ChatMessage } from "./flu-chats-helpers";
 
 /** Interfaz conversacional sobre el contrato real /chats. */
@@ -633,6 +634,15 @@ export const FluChatsPage = () => {
             catch (error) { setError(error instanceof Error ? error.message : "No se pudieron añadir estos archivos."); }
     };
 
+    /** Escribe el inicio de una petición en el compositor de bienvenida, sin enviarla. */
+    const startWith = (prompt: string) => {
+        setFirstMessage(prompt);
+        window.requestAnimationFrame(() => {
+            const box = document.getElementById("flu-first-message");
+            if (box instanceof HTMLTextAreaElement) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
+        });
+    };
+
     const startFromMessage = (text: string) => void run(async () => {
         const prompt = text.trim();
         const files = [...stagedFiles];
@@ -905,8 +915,8 @@ export const FluChatsPage = () => {
                 <div className="flu-welcome-card">
                     <div className="flu-welcome-icon" aria-hidden="true">✧</div>
                     <span className="flu-eyebrow">TU ESPACIO DE CONSULTORÍA</span>
-                    <h1>¿Qué quieres construir hoy?</h1>
-                    <div className="flu-suggestions">{["Ayúdame a crear un documento", "Quiero entender y mejorar un proceso", "Tengo archivos; ayúdame a empezar"].map((example) => <button key={example} type="button" disabled={busy || unavailable || !canStartInScope} onClick={() => startFromMessage(example)}>{example}<span aria-hidden="true">→</span></button>)}</div>
+                    <h1>¿Qué quieres trabajar hoy?</h1>
+                    <div className="flu-suggestions" role="group" aria-label="Lo que Flu3nce puede hacer contigo">{WELCOME_CAPABILITIES.map((capability) => <button key={capability.prompt} type="button" disabled={unavailable || !canStartInScope} onClick={() => startWith(capability.prompt)}>{capability.type ? <DeliverableTypeIcon type={capability.type} /> : <ChatIcon />}{capability.prompt}</button>)}</div>
                     <ChatComposer id="flu-first-message" value={firstMessage} onChange={setFirstMessage} onSubmit={() => startFromMessage(firstMessage)} onAttach={() => sourceInput.current?.click()} attachments={stagedFiles} onRemoveAttachment={(index) => setStagedFiles((items) => items.filter((_, position) => position !== index))} modelControls={modelControls} modelStatus={modelStatus} disabled={unavailable || !canStartInScope} sendBlocked={busy} attachDisabled={busy || unavailable || !canStartInScope || !hasCapability(user, "attachments_multiple")} label="Tu primer mensaje" submitLabel="Enviar primer mensaje" placeholder="Escribe lo que quieras explorar…" />
                 </div>
             </div> : session ? <>
