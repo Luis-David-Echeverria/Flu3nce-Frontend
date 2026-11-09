@@ -64,3 +64,16 @@ test("en modo oscuro usa los tokens oscuros", async ({ page }, testInfo) => {
     await capture(page, testInfo, "chat-oscuro");
     expect(errors).toEqual([]);
 });
+
+test("lo pedido se genera sin botón de confirmar y deja el entregable en el chat", async ({ page }, testInfo) => {
+    const errors = watchErrors(page);
+    await startChat(page, "Quiero una política de compras menores");
+    await page.getByLabel("Mensaje para Flu3nce").fill("Aplica a todas las áreas; compras menores de $10,000 requieren aprobación de Dirección.");
+    await page.getByRole("button", { name: "Enviar mensaje" }).click();
+    await expect(page.getByText("Voy a preparar el borrador de política con lo conversado.")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Confirmar/ })).toHaveCount(0);
+    await expect(page.getByText(/Puedes revisar la versión 1/).first()).toBeVisible({ timeout: 15_000 });
+    await capture(page, testInfo, "chat-generado");
+    expect(errors).toEqual([]);
+});
+

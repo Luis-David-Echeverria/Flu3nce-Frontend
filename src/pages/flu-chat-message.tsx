@@ -48,7 +48,7 @@ export function FluChatMessage({ item, chatId, projectId, actionsCurrent, metada
     // Una propuesta ya confirmada solo repite lo que muestra su trabajo: no se pinta.
     if (item.kind === "intent_to_confirm" && intent?.state === "confirmed" && !item.failure && !item.deliverableCard) return null;
     const displayText = intent?.state === "pending" && !actionsCurrent ? "Esta propuesta ya venció." : visibleMessageText(item);
-    const copyText = item.role === "flu" && !item.intent ? messageCopyText(item, displayText, explanation) : "";
+    const copyText = item.role === "flu" && !item.intent && !item.deliverableCard && !item.generationStatus ? messageCopyText(item, displayText, explanation) : "";
     const confirmation = intent?.state === "pending" ? confirmationReason(intent) : null;
     const revision = intent?.revisionProposal;
     const revises = intent?.intentKind === "revise_deliverable";
