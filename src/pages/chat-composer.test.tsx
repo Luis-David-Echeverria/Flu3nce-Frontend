@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatComposer } from "./chat-composer";
@@ -59,7 +60,8 @@ describe("compositor del chat", () => {
             onresult: ((event: { resultIndex: number; results: Array<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null = null;
             onend: (() => void) | null = null;
             constructor() { recognizer = this; }
-            start() {}
+            onstart: (() => void) | null = null;
+            start() { this.onstart?.(); }
             stop() { this.onend?.(); }
             abort() {}
         }
@@ -136,4 +138,31 @@ describe("compositor del chat", () => {
         act(() => recognizer.onerror?.({ error: "no-speech" }));
         expect(await screen.findByText(/No se detectó voz/)).toBeInTheDocument();
     });
+    it("espera al cierre del dictado para enviar también las últimas palabras", async () => {
+        let recognizer: FakeSpeechRecognition;
+        class FakeSpeechRecognition {
+            onstart: (() => void) | null = null;
+            onend: (() => void) | null = null;
+            onresult: ((event: { resultIndex: number; results: Array<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null = null;
+            constructor() { recognizer = this; }
+            start() { this.onstart?.(); }
+            stop() { this.onresult?.({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: "el cierre" } }] }); this.onend?.(); }
+            abort() {}
+        }
+        vi.stubGlobal("SpeechRecognition", FakeSpeechRecognition);
+        const submit = vi.fn();
+        function Draft() {
+            const [value, setValue] = useState("Hola");
+            return <ChatComposer id="voice-submit" value={value} onChange={setValue} onSubmit={() => submit(value)} onAttach={vi.fn()} label="Mensaje" placeholder="Escribe" />;
+        }
+        render(<Draft />);
+        fireEvent.click(screen.getByRole("button", { name: "Iniciar dictado" }));
+        act(() => recognizer.onresult?.({ resultIndex: 0, results: [{ isFinal: false, 0: { transcript: "el ci" } }] }));
+        expect(screen.getByRole("textbox", { name: "Mensaje" })).toHaveValue("Hola el ci");
+        expect(submit).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole("button", { name: "Enviar mensaje" }));
+        await waitFor(() => expect(submit).toHaveBeenCalledExactlyOnceWith("Hola el cierre"));
+        expect(screen.getByRole("textbox", { name: "Mensaje" })).toHaveValue("Hola el cierre");
+    });
+
 });

@@ -95,3 +95,38 @@ for (const view of [{ name: "bienvenida-claro", width: 1280, dark: false }, { na
         expect(errors).toEqual([]);
     });
 }
+
+for (const view of [{ name: "dictado-claro", width: 1280, dark: false }, { name: "dictado-oscuro", width: 1280, dark: true }, { name: "dictado-390", width: 390, dark: false }]) {
+    test(`el dictado deja ver y editar el borrador antes de enviarlo (${view.name})`, async ({ page }, testInfo) => {
+        const errors = watchErrors(page);
+        await page.addInitScript(() => {
+            class Dictation {
+                onstart: (() => void) | null = null;
+                onend: (() => void) | null = null;
+                onresult: ((event: { resultIndex: number; results: Array<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null = null;
+                constructor() { Object.assign(window, { dictationProbe: this }); }
+                start() { this.onstart?.(); }
+                stop() { this.onresult?.({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: "Prepara una política de compras" } }] }); this.onend?.(); }
+                abort() {}
+            }
+            Object.defineProperty(window, "SpeechRecognition", { configurable: true, value: Dictation });
+        });
+        if (view.dark) await page.addInitScript(() => window.localStorage.setItem("ui-theme", "dark"));
+        await page.setViewportSize({ width: view.width, height: 844 });
+        await page.goto("/flu");
+        await page.getByRole("button", { name: "Iniciar dictado" }).click();
+        await expect(page.getByRole("button", { name: "Detener dictado" })).toHaveAttribute("aria-pressed", "true");
+        await page.evaluate(() => {
+            const probe = (window as unknown as { dictationProbe: { onresult: (event: { resultIndex: number; results: Array<{ isFinal: boolean; 0: { transcript: string } }> }) => void } }).dictationProbe;
+            probe.onresult({ resultIndex: 0, results: [{ isFinal: false, 0: { transcript: "Prepara una política" } }] });
+        });
+        await expect(page.getByLabel("Tu primer mensaje")).toHaveValue("Prepara una política");
+        await capture(page, testInfo, view.name);
+        await page.getByRole("button", { name: "Detener dictado" }).click();
+        const box = page.getByLabel("Tu primer mensaje");
+        await expect(box).toHaveValue("Prepara una política de compras");
+        await box.fill("Prepara una política de compras menores");
+        await expect(page.getByRole("article", { name: /^Tu mensaje/ })).toHaveCount(0);
+        expect(errors).toEqual([]);
+    });
+}
