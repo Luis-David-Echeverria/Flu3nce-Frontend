@@ -62,6 +62,7 @@ describe("dictado del borrador", () => {
         const lateEnd = instances[0].onend;
         act(() => result.current.stop());
         expect(instances[0].abort).toHaveBeenCalledOnce();
+        expect(result.current.error).toBeNull();
         act(() => result.current.start());
         act(() => { lateResult?.({ resultIndex: 0, results: [words("otro chat", true)] }); lateEnd?.(); });
         expect(onResult).not.toHaveBeenCalled();
@@ -122,4 +123,21 @@ describe("dictado del borrador", () => {
         act(() => lateResult?.({ resultIndex: 0, results: [words("texto tardío", true)] }));
         expect(onResult).not.toHaveBeenCalled();
     });
+    it("explica un cierre sin texto en vez de aparentar que el dictado funcionó", () => {
+        const { result } = renderHook(() => useSpeechRecognition());
+        act(() => result.current.start());
+        act(() => instances[0].onstart?.());
+        act(() => instances[0].onend?.());
+        expect(result.current.isActive).toBe(false);
+        expect(result.current.error).toContain("terminó sin recibir texto");
+    });
+
+    it("explica si el navegador cierra el servicio sin llegar a abrirlo", () => {
+        const { result } = renderHook(() => useSpeechRecognition());
+        act(() => result.current.start());
+        act(() => instances[0].onend?.());
+        expect(result.current.isActive).toBe(false);
+        expect(result.current.error).toContain("antes de activarlo");
+    });
+
 });

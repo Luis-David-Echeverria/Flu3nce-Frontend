@@ -133,7 +133,16 @@ export const useSpeechRecognition = ({
             setInterimTranscript(interimRef.current);
             if (committed.length) callbacks.current.onResult?.(committed.join(" "));
         };
-        recognition.onend = () => finish(true);
+        recognition.onend = () => {
+            if (current() && !finalized.size && !interimRef.current && phaseRef.current !== "idle") {
+                const message = phaseRef.current === "starting"
+                    ? "El navegador cerró el dictado antes de activarlo. Revisa el permiso del micrófono o prueba desde otro navegador."
+                    : "El dictado terminó sin recibir texto. Comprueba el micrófono y el servicio de voz de tu navegador e inténtalo de nuevo.";
+                setError(message);
+                callbacks.current.onError?.(message);
+            }
+            finish(true);
+        };
         recognition.onerror = ({ error: code }) => {
             if (code === "aborted") finish(true);
             else fail(errorMessage(code));
@@ -151,6 +160,7 @@ export const useSpeechRecognition = ({
         clearStartupTimer();
         if (phaseRef.current === "starting") {
             // Cancelar el arranque también debe liberar el botón inmediatamente.
+            changePhase("idle");
             recognition.onend?.();
             try { recognition.abort(); } catch { /* Ya puede haber terminado. */ }
             return;
