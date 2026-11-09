@@ -940,13 +940,13 @@ export const FluChatsPage = () => {
                             />;
                         })}
 
+                        {visibleLiveTurn?.accepted && !visibleLiveTurn.userMessageId && !messages.some((message) => message.role === "user" && message.text === visibleLiveTurn.prompt && Date.parse(message.createdAt) >= visibleLiveTurn.startedAt) ? <article className="flu-message flu-user ml-auto px-4 py-3 text-sm">{visibleLiveTurn.prompt}</article> : null}
+                        {visibleLiveTurn ? <ChatStreamResponse turn={visibleLiveTurn} showReferences={showReferences} onOpenDeliverable={openPartDeliverable} /> : null}
+                        {activity && !visibleLiveTurn?.phaseB ? <div role="status" className="flu-thinking">{activity}<span aria-hidden="true" className="flu-thinking-dots"><i /><i /><i /></span></div> : null}
                         {orphanJobActivities.length ? <ChatActivity items={orphanJobActivities.map((item) => {
                             const state = verifiedJobs[item.jobId!]?.status ?? (stoppedJobs.has(item.jobId!) ? "cancelled" : undefined);
                             return state && ["running", "pending"].includes(item.state) ? { ...item, state } : item;
                         })} connection={chatEvents.connection} /> : null}
-                        {activity && !visibleLiveTurn?.phaseB ? <div role="status" className="flu-thinking">{activity}<span aria-hidden="true" className="flu-thinking-dots"><i /><i /><i /></span></div> : null}
-                        {visibleLiveTurn?.accepted && !visibleLiveTurn.userMessageId && !messages.some((message) => message.role === "user" && message.text === visibleLiveTurn.prompt && Date.parse(message.createdAt) >= visibleLiveTurn.startedAt) ? <article className="flu-message flu-user ml-auto px-4 py-3 text-sm">{visibleLiveTurn.prompt}</article> : null}
-                        {visibleLiveTurn ? <ChatStreamResponse turn={visibleLiveTurn} showReferences={showReferences} onOpenDeliverable={openPartDeliverable} /> : null}
                     </div>
                 </div>
                 {showScrollBottom ? <button type="button" onClick={scrollToChatBottom} className={`flu-chat-scroll-bottom ${newReplyBelow ? "has-new-reply" : ""}`} aria-label={newReplyBelow ? "Nueva respuesta de Flu3nce: ir al final" : "Ir al final de la conversación"} title={newReplyBelow ? "Nueva respuesta de Flu3nce" : "Ir al final de la conversación"}><ArrowDown aria-hidden="true" />{newReplyBelow ? <span className="flu-chat-scroll-unread" aria-hidden="true" /> : null}</button> : null}
