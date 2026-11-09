@@ -49,6 +49,12 @@ Reglas que se mantienen:
 - Una tarjeta vieja conserva su versión; publicar otra no la cambia.
 - El modo real nunca cae a maquetas por un error del backend.
 
+## Dictado del borrador
+
+El micrófono del compositor usa `SpeechRecognition` o `webkitSpeechRecognition` del navegador, con idioma `es-MX`. No pasa por el modelo elegido ni crea fuentes o entregables. El soporte de esa API no garantiza que el servicio de voz esté habilitado: el front distingue arranque, escucha, cierre y errores del navegador.
+
+Las palabras provisionales se ven mientras se dicta; al terminar quedan en el borrador para editarlas. Enviar durante la captura espera su último resultado. Cambiar de chat o salir aborta la captura para no escribir en otra conversación. Las pruebas simulan los eventos del navegador; no prueban su servicio externo de voz ni un micrófono físico.
+
 ## Modos y configuración
 
 | Modo | Comando | Qué usa |

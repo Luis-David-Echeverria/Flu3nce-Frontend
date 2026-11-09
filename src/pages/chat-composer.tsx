@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, type FormEvent, type KeyboardEvent } from "react";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import type { ModelList } from "@/services/v2/models";
 
@@ -55,9 +55,9 @@ export function ChatComposer({ id, value, onChange, onSubmit, onAttach, onOpenLi
     const textarea = useRef<HTMLTextAreaElement>(null);
     const draftRef = useRef(value);
     draftRef.current = value;
-    const [dictationNotice, setDictationNotice] = useState<string | null>(null);
+    const sendAfterDictation = useRef(false);
     const attachmentKey = (file: File) => `${file.name}-${file.size}-${file.lastModified}`;
-    const { isListening, isSupported, error: dictationError, start, stop } = useSpeechRecognition({
+    const { isListening, isStarting, isStopping, isActive: dictating, interimTranscript, error: dictationError, start, stop } = useSpeechRecognition({
         onResult: (transcript) => {
             const next = [draftRef.current.trim(), transcript.trim()].filter(Boolean).join(" ");
             draftRef.current = next;
@@ -66,39 +66,52 @@ export function ChatComposer({ id, value, onChange, onSubmit, onAttach, onOpenLi
         },
     });
 
-    useEffect(() => { if (disabled && isListening) stop(); }, [disabled, isListening, stop]);
+    const displayedValue = [value, interimTranscript].filter(Boolean).join(value && /\s$/.test(value) ? "" : " ");
+    useEffect(() => {
+        if (disabled || sendBlocked || submitDisabled || dictationError) sendAfterDictation.current = false;
+        if (disabled && dictating) stop();
+        if (!dictating && sendAfterDictation.current) {
+            sendAfterDictation.current = false;
+            if (!disabled && !sendBlocked && !submitDisabled && (value.trim() || attachments.length)) onSubmit();
+        }
+    }, [disabled, sendBlocked, submitDisabled, dictationError, dictating, stop, value, attachments.length, onSubmit]);
 
     useEffect(() => {
         const node = textarea.current;
         if (!node) return;
         node.style.height = "auto";
         node.style.height = `${Math.min(node.scrollHeight, 176)}px`;
-    }, [value]);
+    }, [displayedValue]);
 
+    const submitDraft = () => {
+        if (disabled || sendBlocked || submitDisabled || (!displayedValue.trim() && !attachments.length)) return;
+        if (dictating) { sendAfterDictation.current = true; stop(); }
+        else onSubmit();
+    };
     const handleSubmit = (event: FormEvent) => {
         event.preventDefault();
-        if (!disabled && !sendBlocked && !submitDisabled && (value.trim() || attachments.length)) { if (isListening) stop(); onSubmit(); }
+        submitDraft();
     };
     const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
         if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault();
-            if (!disabled && !sendBlocked && !submitDisabled && (value.trim() || attachments.length)) { if (isListening) stop(); onSubmit(); }
+            submitDraft();
         }
     };
 
     return <form onSubmit={handleSubmit} className={`flu-chat-composer ${stopControl ? "is-working" : ""}`}>
         {attachments.length ? <div className="flu-chat-attachment-tray" aria-label="Archivos pendientes de enviar">{attachments.map((file, index) => { const progress = uploadProgress; const name = attachmentNameParts(file.name); return <div key={attachmentKey(file)} className="flu-chat-attachment"><span aria-hidden="true">▤</span><span className="flu-chat-attachment-name" title={file.name}><span className="flu-chat-attachment-name-start">{name.start}</span><span className="flu-chat-attachment-name-end">{name.end}</span></span><small>{file.size < 1048576 ? `${Math.max(1, Math.round(file.size / 1024))} KB` : `${(file.size / 1048576).toFixed(1)} MB`}</small><span className="flu-chat-attachment-state">{progress === null ? "Pendiente" : progress >= 100 ? "Procesando" : `Subiendo ${progress}%`}</span><button type="button" onClick={() => onRemoveAttachment?.(index)} disabled={disabled || sendBlocked} aria-label={`Quitar ${file.name}`} title={`Quitar ${file.name}`}>×</button>{progress !== null ? <div className="flu-chat-attachment-progress" role="progressbar" aria-label={`Carga de ${file.name}`} aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${progress}%` }} /></div> : null}</div>; })}</div> : null}
         <label className="sr-only" htmlFor={id}>{label}</label>
-        <textarea ref={textarea} id={id} value={value} onChange={(event) => { draftRef.current = event.target.value; onChange(event.target.value); }} onKeyDown={handleKeyDown} disabled={disabled} placeholder={placeholder} rows={2} className="flu-chat-composer-input" />
+        <textarea ref={textarea} id={id} value={displayedValue} readOnly={dictating} onChange={(event) => { draftRef.current = event.target.value; onChange(event.target.value); }} onKeyDown={handleKeyDown} disabled={disabled} placeholder={placeholder} rows={2} className="flu-chat-composer-input" />
         <div className="flu-chat-composer-toolbar">
             <button type="button" onClick={onAttach} disabled={attachDisabled} className="flu-chat-composer-attach" aria-label="Adjuntar archivos" title="Adjuntar archivos"><PaperclipIcon /><span>Adjuntar</span></button>
             {onOpenLibrary ? <button type="button" onClick={onOpenLibrary} disabled={attachDisabled} className="flu-chat-composer-attach" aria-label="Adjuntar desde Flu3nce" title="Adjuntar desde la biblioteca del proyecto"><LibraryIcon /><span>Desde Flu3nce</span></button> : null}
             {modelControls ? <select className="flu-chat-composer-model" aria-label="Modelo de Flu3nce" value={modelControls.selected} onChange={(event) => modelControls.onChange(event.target.value)}>{modelControls.catalog.models.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}</select> : null}
             {!modelControls && modelStatus ? <span className="flu-chat-composer-model-status"><span>{modelStatus.state === "loading" ? "Consultando…" : "No disponible"}</span>{modelStatus.state !== "loading" ? <button type="button" onClick={modelStatus.onRetry} aria-label="Reintentar consulta de modelos" title="Reintentar consulta de modelos">↻</button> : null}</span> : null}
             <span className="flu-chat-composer-hint">{stopControl?.requested ? "Deteniendo Flu3nce…" : sendBlocked && !disabled ? "Puedes seguir escribiendo; lo envías cuando Flu3nce termine" : "Enter para enviar · Shift + Enter para nueva línea"}</span>
-            <button type="button" onClick={() => { setDictationNotice(null); if (!isSupported) { setDictationNotice("El dictado no está disponible en este navegador."); return; } if (isListening) stop(); else void start(); }} disabled={disabled} className={`flu-chat-composer-dictate ${isListening ? "is-listening" : ""}`} aria-label={isListening ? "Detener dictado" : "Iniciar dictado"} aria-pressed={isListening} title={isListening ? "Detener dictado" : "Dictar mensaje"}><MicrophoneIcon /></button>
-            {uploadControl || stopControl ? <button type="button" onClick={uploadControl ?? stopControl?.onStop} disabled={stopControl?.requested} className="flu-chat-composer-send is-task-control" aria-label={uploadControl ? "Cancelar envío de archivos" : stopControl?.requested ? "Deteniendo Flu3nce" : "Detener Flu3nce"} title={uploadControl ? "Cancelar envío de archivos" : "Detener Flu3nce"}><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg></button> : <button type="submit" disabled={disabled || sendBlocked || submitDisabled || (!value.trim() && !attachments.length)} className="flu-chat-composer-send" aria-label={submitLabel} title={submitLabel}><SendIcon /></button>}
+            <button type="button" onClick={() => { if (dictating) stop(); else start(); }} disabled={disabled || isStopping} className={`flu-chat-composer-dictate ${isListening ? "is-listening" : ""}`} aria-label={isStarting ? "Cancelar inicio del dictado" : isStopping ? "Terminando dictado" : isListening ? "Detener dictado" : "Iniciar dictado"} aria-pressed={isListening} aria-busy={isStarting || isStopping} title={dictating ? "Terminar dictado" : "Dictar mensaje"}><MicrophoneIcon /></button>
+            {uploadControl || stopControl ? <button type="button" onClick={uploadControl ?? stopControl?.onStop} disabled={stopControl?.requested} className="flu-chat-composer-send is-task-control" aria-label={uploadControl ? "Cancelar envío de archivos" : stopControl?.requested ? "Deteniendo Flu3nce" : "Detener Flu3nce"} title={uploadControl ? "Cancelar envío de archivos" : "Detener Flu3nce"}><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg></button> : <button type="submit" disabled={disabled || sendBlocked || submitDisabled || (!displayedValue.trim() && !attachments.length)} className="flu-chat-composer-send" aria-label={submitLabel} title={submitLabel}><SendIcon /></button>}
         </div>
-        {isListening ? <p role="status" className="flu-chat-composer-notice">Escuchando… pulsa el micrófono para detener.</p> : dictationError || dictationNotice ? <p role="status" className="flu-chat-composer-notice">{dictationError ?? dictationNotice}</p> : null}
+        {dictating || dictationError ? <p role="status" className="flu-chat-composer-notice">{isStarting ? "Activando el micrófono… permite su uso si tu navegador lo solicita." : isStopping ? "Terminando el dictado…" : isListening ? "Escuchando… pulsa el micrófono para terminar y editar el texto." : dictationError}</p> : null}
     </form>;
 }

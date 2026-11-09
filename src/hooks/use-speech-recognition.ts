@@ -5,11 +5,12 @@ interface SpeechRecognitionEvent {
     resultIndex: number;
 }
 
-// La Web Speech API es vendor-prefixed y no está en lib.dom; declaramos lo que usamos.
+// La Web Speech API sigue usando prefijos en algunos navegadores.
 interface SpeechRecognition {
     lang: string;
     continuous: boolean;
     interimResults: boolean;
+    onstart: (() => void) | null;
     onresult: ((event: SpeechRecognitionEvent) => void) | null;
     onend: (() => void) | null;
     onerror: ((event: { error: string }) => void) | null;
@@ -33,129 +34,159 @@ const getSpeechRecognition = (): (new () => SpeechRecognition) | null => {
     return speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition || null;
 };
 
-const DENIED_MESSAGE = "Permiso de micrófono denegado.";
+function errorMessage(code: string) {
+    if (code === "not-allowed") return "No se permitió usar el micrófono. Revisa el permiso de este sitio en tu navegador y vuelve a intentarlo.";
+    if (code === "service-not-allowed") return "El servicio de dictado no está habilitado en este navegador. Prueba desde Chrome o Safari; el permiso del micrófono no basta para activar ese servicio.";
+    if (code === "no-speech") return "No se detectó voz. Comprueba el micrófono e inténtalo de nuevo.";
+    if (code === "audio-capture") return "No se encontró un micrófono disponible. Comprueba que esté conectado y que otra aplicación no lo esté bloqueando.";
+    if (code === "network") return "El servicio de dictado del navegador no respondió. Comprueba tu conexión o prueba desde otro navegador.";
+    if (code === "language-not-supported") return "El servicio de dictado de este navegador no admite español de México.";
+    return "No se pudo completar el dictado. Lo que ya escribiste se conserva; puedes volver a intentarlo.";
+}
 
 export const useSpeechRecognition = ({
-    lang = "es-MX",
-    continuous = true,
-    interimResults = true,
-    onResult,
-    onError,
-    onEnd,
+    lang = "es-MX", continuous = true, interimResults = true, onResult, onError, onEnd,
 }: UseSpeechRecognitionOptions = {}) => {
-    const [isListening, setIsListening] = useState(false);
+    const [phase, setPhase] = useState<"idle" | "starting" | "listening" | "stopping">("idle");
+    const [interimTranscript, setInterimTranscript] = useState("");
     const [error, setError] = useState<string | null>(null);
     const recognitionRef = useRef<SpeechRecognition | null>(null);
-    const onResultRef = useRef(onResult);
-    const onErrorRef = useRef(onError);
-    const onEndRef = useRef(onEnd);
+    const phaseRef = useRef(phase);
+    const interimRef = useRef("");
+    const startupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const callbacks = useRef({ onResult, onError, onEnd });
+    callbacks.current = { onResult, onError, onEnd };
 
-    onResultRef.current = onResult;
-    onErrorRef.current = onError;
-    onEndRef.current = onEnd;
+    const clearStartupTimer = useCallback(() => {
+        if (startupTimer.current !== null) clearTimeout(startupTimer.current);
+        startupTimer.current = null;
+    }, []);
 
-    const isSupported = !!getSpeechRecognition();
-
-    const createRecognition = useCallback(() => {
-        const SpeechRecognitionCtor = getSpeechRecognition();
-        if (!SpeechRecognitionCtor) return null;
-
-        const recognition = new SpeechRecognitionCtor();
-        recognition.lang = lang;
-        recognition.continuous = continuous;
-        recognition.interimResults = interimResults;
-
-        recognition.onresult = (event: SpeechRecognitionEvent) => {
-            let transcript = "";
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const result = event.results[i];
-                if (result.isFinal) {
-                    transcript += result[0].transcript;
-                }
-            }
-            if (transcript && onResultRef.current) {
-                onResultRef.current(transcript);
-            }
-        };
-
-        recognition.onend = () => {
-            setIsListening(false);
-            recognitionRef.current = null;
-            onEndRef.current?.();
-        };
-
-        recognition.onerror = (event: { error: string }) => {
-            if (event.error !== "aborted") {
-                const message = event.error === "not-allowed" || event.error === "service-not-allowed"
-                    ? DENIED_MESSAGE
-                    : event.error === "no-speech"
-                        ? "No se detectó voz. Comprueba el micrófono e inténtalo de nuevo."
-                        : event.error === "audio-capture"
-                            ? "No se encontró un micrófono disponible."
-                            : event.error === "network"
-                                ? "El servicio de dictado no respondió. Comprueba la conexión e inténtalo de nuevo."
-                                : `Error de reconocimiento de voz: ${event.error}`;
-                setError(message);
-                onErrorRef.current?.(message);
-            }
-            setIsListening(false);
-            recognitionRef.current = null;
-        };
-
-        return recognition;
-    }, [lang, continuous, interimResults]);
-
-    const stop = useCallback(() => {
-        recognitionRef.current?.stop();
+    const changePhase = useCallback((next: typeof phase) => {
+        phaseRef.current = next;
+        setPhase(next);
     }, []);
 
     const start = useCallback(() => {
+        // No sustituir una sesión que todavía está arrancando o terminando.
+        if (recognitionRef.current) return;
         setError(null);
-
-        // Clean up any previous instance
-        if (recognitionRef.current) {
-            try { recognitionRef.current.stop(); } catch { /* ignore */ }
-            recognitionRef.current = null;
+        setInterimTranscript("");
+        interimRef.current = "";
+        const failBeforeStart = (message: string) => { setError(message); callbacks.current.onError?.(message); };
+        if (window.isSecureContext === false) {
+            failBeforeStart("Para usar el micrófono, abre Flu3nce mediante una conexión HTTPS.");
+            return;
         }
-
-        // SpeechRecognition solicita su propio permiso. Un getUserMedia previo
-        // puede fallar o quedarse esperando aunque el reconocimiento sí funcione.
-        const recognition = createRecognition();
-        if (!recognition) {
-            const message = "El dictado no está disponible en este navegador.";
-            setError(message);
-            onErrorRef.current?.(message);
+        const Recognition = getSpeechRecognition();
+        if (!Recognition) {
+            failBeforeStart("Este navegador no ofrece dictado. Abre Flu3nce en un navegador compatible, como Chrome o Safari.");
             return;
         }
 
+        let recognition: SpeechRecognition;
+        try { recognition = new Recognition(); }
+        catch { failBeforeStart("El navegador no pudo iniciar el servicio de dictado."); return; }
         recognitionRef.current = recognition;
-
-        try {
-            recognition.start();
-            setIsListening(true);
-        } catch {
-            const message = "No se pudo iniciar el reconocimiento de voz. Comprueba el permiso del micrófono e inténtalo de nuevo.";
-            setError(message);
-            onErrorRef.current?.(message);
+        recognition.lang = lang;
+        recognition.continuous = continuous;
+        recognition.interimResults = interimResults;
+        const finalized = new Set<number>();
+        const current = () => recognitionRef.current === recognition;
+        const finish = (keepInterim: boolean) => {
+            if (!current()) return;
+            clearStartupTimer();
             recognitionRef.current = null;
-        }
-    }, [createRecognition]);
-
-    const toggle = useCallback(() => {
-        if (isListening) {
-            stop();
-        } else {
-            start();
-        }
-    }, [isListening, start, stop]);
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            recognitionRef.current?.stop();
-            recognitionRef.current = null;
+            recognition.onstart = recognition.onresult = recognition.onend = recognition.onerror = null;
+            const remaining = interimRef.current;
+            interimRef.current = "";
+            setInterimTranscript("");
+            if (keepInterim && remaining) callbacks.current.onResult?.(remaining);
+            changePhase("idle");
+            callbacks.current.onEnd?.();
         };
-    }, []);
+        const fail = (message: string) => {
+            if (!current()) return;
+            setError(message);
+            callbacks.current.onError?.(message);
+            finish(true);
+            try { recognition.abort(); } catch { /* Ya puede haber terminado. */ }
+        };
+        recognition.onstart = () => {
+            if (!current() || phaseRef.current !== "starting") return;
+            clearStartupTimer();
+            changePhase("listening");
+        };
+        recognition.onresult = (event) => {
+            if (!current()) return;
+            const committed: string[] = [];
+            const interim: string[] = [];
+            for (let index = 0; index < event.results.length; index++) {
+                const result = event.results[index];
+                const text = result[0]?.transcript.trim();
+                if (!text) continue;
+                if (result.isFinal) {
+                    if (!finalized.has(index)) { finalized.add(index); committed.push(text); }
+                } else interim.push(text);
+            }
+            interimRef.current = interim.join(" ");
+            setInterimTranscript(interimRef.current);
+            if (committed.length) callbacks.current.onResult?.(committed.join(" "));
+        };
+        recognition.onend = () => {
+            if (current() && !finalized.size && !interimRef.current && phaseRef.current !== "idle") {
+                const message = phaseRef.current === "starting"
+                    ? "El navegador cerró el dictado antes de activarlo. Revisa el permiso del micrófono o prueba desde otro navegador."
+                    : "El dictado terminó sin recibir texto. Comprueba el micrófono y el servicio de voz de tu navegador e inténtalo de nuevo.";
+                setError(message);
+                callbacks.current.onError?.(message);
+            }
+            finish(true);
+        };
+        recognition.onerror = ({ error: code }) => {
+            if (code === "aborted") finish(true);
+            else fail(errorMessage(code));
+        };
+        changePhase("starting");
+        // start() puede retornar sin llegar a abrir el servicio de voz del navegador.
+        startupTimer.current = setTimeout(() => fail("El navegador no logró activar el dictado. Revisa el permiso del micrófono o prueba desde otro navegador."), 15000);
+        try { recognition.start(); }
+        catch { fail("No se pudo iniciar el dictado. Comprueba el permiso del micrófono e inténtalo de nuevo."); }
+    }, [lang, continuous, interimResults, clearStartupTimer, changePhase]);
 
-    return { isListening, isSupported, error, start, stop, toggle };
+    const stop = useCallback(() => {
+        const recognition = recognitionRef.current;
+        if (!recognition || phaseRef.current === "stopping") return;
+        clearStartupTimer();
+        if (phaseRef.current === "starting") {
+            // Cancelar el arranque también debe liberar el botón inmediatamente.
+            changePhase("idle");
+            recognition.onend?.();
+            try { recognition.abort(); } catch { /* Ya puede haber terminado. */ }
+            return;
+        }
+        changePhase("stopping");
+        startupTimer.current = setTimeout(() => {
+            recognition.onend?.();
+            try { recognition.abort(); } catch { /* Conservar lo reconocido si no llega el cierre. */ }
+        }, 3000);
+        try { recognition.stop(); }
+        catch {
+            recognition.onend?.();
+            try { recognition.abort(); } catch { /* Liberar la captura aunque falle stop(). */ }
+        }
+    }, [clearStartupTimer, changePhase]);
+
+    useEffect(() => () => {
+        clearStartupTimer();
+        const recognition = recognitionRef.current;
+        recognitionRef.current = null;
+        if (recognition) {
+            recognition.onstart = recognition.onresult = recognition.onend = recognition.onerror = null;
+            try { recognition.abort(); } catch { /* No insertar resultados al salir del chat. */ }
+        }
+    }, [clearStartupTimer]);
+
+    const toggle = useCallback(() => { if (phaseRef.current === "idle") start(); else stop(); }, [start, stop]);
+    return { isListening: phase === "listening", isStarting: phase === "starting", isStopping: phase === "stopping", isActive: phase !== "idle", interimTranscript, isSupported: !!getSpeechRecognition(), error, start, stop, toggle };
 };
