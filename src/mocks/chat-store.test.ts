@@ -4,34 +4,30 @@ import { mockConfirmChatIntent, mockCreateChat, mockGetChat, mockGetChatMovePrev
 afterEach(() => vi.useRealTimers());
 
 describe("recorrido local de Flu3nce", () => {
-    it("incluye una galería con fuente, tres entregables y propuesta de revisión", () => {
+    it("incluye una galería con fuente y tres entregables, sin propuestas pendientes", () => {
         expect(mockListChats({ projectId: MOCK_TOUR_PROJECT_ID }).chats.some((chat) => chat.id === MOCK_TOUR_CHAT_ID)).toBe(true);
         const tour = mockGetChat(MOCK_TOUR_CHAT_ID);
         expect(tour.messages.filter((message) => message.deliverableCard)).toHaveLength(3);
-        expect(tour.messages.some((message) => message.intent?.intentKind === "revise_deliverable" && message.intent.state === "pending")).toBe(true);
+        expect(tour.pendingIntentIds).toEqual([]);
         expect(mockListChatSources(MOCK_TOUR_CHAT_ID).sources).toHaveLength(1);
     });
 
-    it("pide contexto antes de proponer y un sí libre no confirma", () => {
+    it("pide contexto una vez y, con el contexto, lanza el trabajo sin propuesta", () => {
         const chat = mockCreateChat("Política de ejemplo");
         const first = mockSendChatMessage(chat.id, "Quiero una política", "client_mock_1");
         expect(first.reply.kind).toBe("clarification");
         const second = mockSendChatMessage(chat.id, "Aplica a todas las áreas; compras menores de $10,000 requieren aprobación de Dirección.", "client_mock_2");
-        expect(second.reply.intent?.state).toBe("pending");
-        mockSendChatMessage(chat.id, "sí", "client_mock_3");
-        const session = mockGetChat(chat.id);
-        expect(session.pendingIntentIds).toEqual([]);
-        expect(session.messages.find((message) => message.id === second.reply.id)?.intent?.state).toBe("expired");
-        expect(session.messages.some((message) => message.deliverableCard)).toBe(false);
+        expect(second.reply.kind).toBe("text");
+        expect(second.reply.intent).toBeUndefined();
+        expect(second.reply.refs?.jobId).toBeTruthy();
+        expect(mockGetChat(chat.id).pendingIntentIds).toEqual([]);
     });
 
-    it("muestra cola, progreso, entregable y revisión como una sola actividad confirmada", async () => {
+    it("muestra cola, progreso, entregable y revisión sin pedir confirmación", async () => {
         vi.useFakeTimers();
         const chat = mockCreateChat("Compras");
         mockSendChatMessage(chat.id, "Quiero una política", "client_mock_4");
-        const reply = mockSendChatMessage(chat.id, "Aplica a todas las áreas; compras menores de $10,000 requieren aprobación de Dirección.", "client_mock_5").reply;
-        const result = mockConfirmChatIntent(chat.id, reply.intent!.id);
-        expect("jobId" in result).toBe(true);
+        mockSendChatMessage(chat.id, "Aplica a todas las áreas; compras menores de $10,000 requieren aprobación de Dirección.", "client_mock_5");
         expect(mockGetChat(chat.id).messages.some((message) => message.generationStatus?.phase === "queued")).toBe(true);
         await vi.runAllTimersAsync();
         const completed = mockGetChat(chat.id);
@@ -39,10 +35,18 @@ describe("recorrido local de Flu3nce", () => {
         expect(completed.messages.some((message) => message.generationStatus?.phase === "done")).toBe(true);
         expect(completed.messages.find((message) => message.deliverableCard)?.deliverableCard?.version?.number).toBe(1);
         const revision = mockSendChatMessage(chat.id, "Corrige la política: la aprobación debe ser de Finanzas", "client_mock_6").reply;
-        expect(revision.intent?.intentKind).toBe("revise_deliverable");
-        mockConfirmChatIntent(chat.id, revision.intent!.id);
+        expect(revision.intent).toBeUndefined();
+        expect(revision.refs?.jobId).toBeTruthy();
         await vi.runAllTimersAsync();
         expect(mockGetChat(chat.id).messages.find((message) => message.deliverableCard)?.deliverableCard?.version?.number).toBe(2);
+    });
+
+    it("la presentación con Gamma sí pide confirmación, con su motivo", () => {
+        const chat = mockCreateChat("Presentación");
+        const reply = mockSendChatMessage(chat.id, "Haz una presentación del proceso de compras menores para Dirección con lo que tenemos en este chat.", "client_mock_7").reply;
+        expect(reply.intent?.state).toBe("pending");
+        expect(reply.intent?.reason).toBe("external_cost");
+        expect("jobId" in mockConfirmChatIntent(chat.id, reply.intent!.id)).toBe(true);
     });
 
     it("adjunta un archivo al chat suelto y lo mueve con vista previa", () => {

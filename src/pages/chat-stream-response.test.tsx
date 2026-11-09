@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatStreamResponse } from "./chat-stream-response";
-import { beginLiveTurn, type LiveTurn } from "./chat-stream-state";
+import { beginLiveTurn, reduceLiveTurn, type LiveTurn } from "./chat-stream-state";
 afterEach(cleanup);
 
 describe("contenido visible durante el stream", () => {
@@ -21,6 +21,32 @@ describe("contenido visible durante el stream", () => {
         expect([...ordered].map((element) => element.textContent)).toEqual(["HallazgosLa aprobación requiere seguimiento.", "▤PolíticaVersión 1→", "Con esta política preparo la presentación."]);
         fireEvent.click(screen.getByRole("button", { name: /PolíticaVersión 1/ }));
         expect(open).toHaveBeenCalledWith(card);
+    });
+
+    it("intercala texto, actividad y tarjeta en el orden en que llegaron", () => {
+        const card = { deliverableId: "d1", deliverableType: "diagram_as_is" as const, outcome: "generated" as const, version: { id: "v1", number: 1 } };
+        const events = [
+            { event: "turn.start", data: { turnId: "t1" } },
+            { event: "part.start", data: { partId: "p1", index: 0, kind: "text" } },
+            { event: "text.block", data: { partId: "p1", seq: 1, markdown: "Voy a leer el procedimiento." } },
+            { event: "activity.start", data: { activityId: "a1", kind: "tool", label: "Leyendo el procedimiento", ms: 0 } },
+            { event: "activity.end", data: { activityId: "a1", kind: "tool", label: "Leyendo el procedimiento", ms: 1200, state: "done" } },
+            { event: "part.start", data: { partId: "p2", index: 1, kind: "deliverable_card" } },
+            { event: "deliverable.card", data: { partId: "p2", deliverableCard: card } },
+        ];
+        const turn = events.reduce((current, event) => reduceLiveTurn(current, event as never, 1000), beginLiveTurn("c1", "request", "Diagrama"));
+        const { container } = render(<ChatStreamResponse turn={turn} onOpenDeliverable={vi.fn()} />);
+        const order = [...container.querySelectorAll(".flu-message, .flu-chat-activity, .flu-chat-stream-card")].map((element) => element.className.split(" ")[0]);
+        expect(order).toEqual(["flu-message", "flu-chat-activity", "flu-chat-stream-card"]);
+    });
+
+    it("no da la solicitud por terminada al cerrar el stream si lanzó trabajos", () => {
+        const turn: LiveTurn = { ...beginLiveTurn("c1", "request", "Política"), phaseB: true, state: "done", jobIds: ["job_1"], activities: [
+            { id: "a1", label: "Preparando el trabajo", kind: "tool", state: "done", ms: 800, updatedAt: 0, order: 0 },
+        ] };
+        render(<ChatStreamResponse turn={turn} onOpenDeliverable={vi.fn()} />);
+        expect(screen.getByText("Respuesta lista · el trabajo sigue en curso")).toBeInTheDocument();
+        expect(screen.queryByText("Actividad terminada")).not.toBeInTheDocument();
     });
 
     it("muestra varios entregables como tarjetas y distingue el que sigue preparándose", () => {

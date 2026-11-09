@@ -1,6 +1,11 @@
 import * as api from "@/services/v2/upload-batches";
 import { ApiServiceError } from "@/services/v2/http";
 
+/** El mismo nombre aunque llegue en otra forma Unicode (macOS escribe los acentos descompuestos). */
+export function sameFileName(a: string, b: string): boolean {
+    return a.normalize("NFC") === b.normalize("NFC");
+}
+
 export const MAX_UPLOAD_BYTES = 3 * 1024 ** 3;
 export type LocalUploadFile = { name: string; size: number; lastModified: number; mime: string; fingerprint?: string; cancelled?: boolean };
 export type TransferState = { loaded?: number; error?: string; needsFile?: boolean };
@@ -93,7 +98,7 @@ export class UploadBatchManager {
         this.update(id, (current) => ({ ...current, error: undefined }));
         try {
             const batch = await api.createUploadBatch(record.chatId, { text: record.text, clientMessageId: id, ...(record.model ? { model: record.model } : {}), files: record.files.map(({ name, size, mime }) => ({ name, size, mime })) });
-            if (batch.files.length !== record.files.length || batch.files.some((file, index) => file.name !== record.files[index].name || file.size !== record.files[index].size)) throw new ApiServiceError("El lote recibido no coincide con los archivos declarados");
+            if (batch.files.length !== record.files.length || batch.files.some((file, index) => !sameFileName(file.name, record.files[index].name) || file.size !== record.files[index].size)) throw new ApiServiceError("El lote recibido no coincide con los archivos declarados");
             this.update(id, (current) => ({ ...current, batch }));
             if (this.find(id)?.cancelRequested) await this.cancel(id);
             else {
@@ -188,7 +193,7 @@ export class UploadBatchManager {
         if (record.cancelRequested) { await this.cancel(id); return; }
         if (index !== undefined && file) {
             const expected = record.files[index];
-            if (file.name !== expected.name || file.size !== expected.size || (expected.fingerprint && await api.fileFingerprint(file) !== expected.fingerprint)) throw new Error("Selecciona el mismo archivo que empezó a subir; el nombre o el contenido no coincide.");
+            if (!sameFileName(file.name, expected.name) || file.size !== expected.size || (expected.fingerprint && await api.fileFingerprint(file) !== expected.fingerprint)) throw new Error("Selecciona el mismo archivo que empezó a subir; el nombre o el contenido no coincide.");
             this.files.set(fileKey(id, index), file);
         }
         this.update(id, (current) => ({ ...current, error: undefined, transfers: index === undefined ? {} : { ...current.transfers, [current.batch?.files[index]?.uploadId ?? ""]: {} } }));

@@ -41,8 +41,11 @@ function legacyTimeline(messages: ChatMessage[]): LegacyTimelineEntry[] {
             const previousIndex = timeline.indexOf(entry);
             if (previousIndex >= 0) timeline.splice(previousIndex, 1);
             entry.messages.push(message);
+            // La actividad del trabajo va antes de lo que produjo, como ocurrió.
+            const firstCard = timeline.findIndex((item) => item.type === "message" && item.message.kind === "deliverable_card" && eventJobId(item.message) === jobId);
+            if (firstCard >= 0) timeline.splice(firstCard, 0, entry);
+            else timeline.push(entry);
             if (message.kind === "deliverable_card") timeline.push({ type: "message", message });
-            timeline.push(entry);
             adjacentJob = entry;
             continue;
         }

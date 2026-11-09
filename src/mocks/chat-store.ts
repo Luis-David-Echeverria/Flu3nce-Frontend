@@ -44,7 +44,13 @@ function offer(record: ChatRecord, type: DeliverableType, request: string): Cons
         rationale: "La conversación ya contiene un objetivo y alcance de ejemplo.",
         newUnit: { name, kind: unitKind(type) },
     };
-    return add(record, "flu", "intent_to_confirm", `Puedo preparar el ${label} con lo conversado. Revisa la propuesta antes de confirmar.`, { intent });
+    // Como el backend con el núcleo: lo pedido se ejecuta en el turno. Solo la presentación
+    // (Gamma, con coste) sigue pidiendo confirmación, con su motivo.
+    if (type === "presentation") return add(record, "flu", "intent_to_confirm", "La presentación se hace con Gamma y consume créditos. Confírmala para empezar.", { intent: { ...intent, reason: "external_cost" } });
+    const reply = add(record, "flu", "text", `Voy a preparar el ${label} con lo conversado.`);
+    intent.state = "confirmed";
+    reply.refs = { jobId: launch(record, intent) };
+    return reply;
 }
 
 function seed() {
@@ -68,20 +74,13 @@ function seed() {
         add(tour, "flu", "generation_status", `Preparando ${sample.title}`, { unitId: sample.unitId, refs: { jobId }, generationStatus: { jobId, target: "deliverable", deliverableTypes: [sample.type], phase: "done", stepLabel: `${sample.title} listo` } });
         add(tour, "flu", "deliverable_card", `${sample.title} disponible`, { unitId: sample.unitId, refs: { jobId, deliverableIds: [deliverable.id] }, deliverableCard: { deliverableId: deliverable.id, deliverableType: sample.type, outcome: "generated", status: "ready", version: { id: `ver_mock_${deliverable.currentVersion}`, number: deliverable.currentVersion }, summary: `Ejemplo visual de ${sample.title.toLowerCase()}.`, title: sample.title } as NonNullable<MockMessage["deliverableCard"]> & { title: string } });
     }
-    add(tour, "user", "text", "Corrige la política: la aprobación de compras menores a $10,000 debe ser de Dirección.");
-    const current = mockGetDeliverable(DEMO_PROJECT, "dlv_mock_policy_draft");
-    const revision: MockIntent = {
-        id: next("intent"), intentKind: "revise_deliverable", target: "deliverable", deliverableTypes: ["policy_draft"], state: "pending",
-        unitId: current.unitId, deliverableId: current.id,
-        revisionProposal: { deliverableId: current.id, baseVersion: { deliverableId: current.id, versionId: `ver_mock_${current.currentVersion}`, number: current.currentVersion }, request: "Cambiar la aprobación a Dirección para compras menores a $10,000", executionScope: "full_regeneration", changeSummary: "Se regenerará el borrador completo con esta corrección; la versión anterior quedará en el historial." },
-    };
-    add(tour, "flu", "intent_to_confirm", "Revisaré la política existente con esa corrección. La versión anterior se conservará.", { intent: revision });
     records.set(tour.chat.id, tour);
 
     const guided: ChatRecord = { chat: { id: "chat_mock_guided", projectId: DEMO_PROJECT, title: "Desde cero · propuesta y progreso", shared: false, unassigned: false, access: "owner", createdAt: stamp, updatedAt: stamp }, messages: [], sources: [], facts: [] };
     add(guided, "user", "text", "Quiero una política de compras menores: aplica a todas las áreas, hasta $10,000 y requiere aprobación de Dirección.");
     add(guided, "flu", "text", "Entendido. El objetivo, el alcance y la regla de aprobación ya están claros. Podemos preparar un primer borrador y ajustarlo después.");
-    offer(guided, "policy_draft", "Política de compras menores");
+    add(guided, "flu", "text", "Si quieres, lo preparo ahora: dime «adelante».");
+    guided.awaiting = "policy_draft";
     records.set(guided.chat.id, guided);
 }
 seed();
@@ -126,11 +125,16 @@ export const mockSendChatMessage = (id: string, text: string, clientMessageId: s
         const targeted = previous.deliverableType === "diagram_as_is";
         const intent: MockIntent = { id: next("intent"), intentKind: "revise_deliverable", target: "deliverable", deliverableTypes: [previous.deliverableType], state: "pending", unitId, deliverableId: previous.deliverableId,
             revisionProposal: { deliverableId: previous.deliverableId, baseVersion: { deliverableId: previous.deliverableId, versionId: `ver_mock_${current.currentVersion}`, number: current.currentVersion }, request: text, executionScope: targeted ? "targeted_change" : "full_regeneration", changeSummary: targeted ? "Se ajustará solo el elemento indicado del diagrama." : "Se regenerará el entregable completo con esta instrucción; la versión anterior quedará en el historial.", ...(targeted ? { preview: `Antes: ${previous.summary ?? "versión actual"}\nDespués: ${text}` } : {}) } };
-        reply = add(record, "flu", "intent_to_confirm", "Entiendo la corrección. Revisa qué se modificaría antes de aplicarla.", { intent });
+        intent.state = "confirmed";
+        reply = add(record, "flu", "text", targeted ? "Aplico la corrección solo en el elemento indicado. La versión anterior queda en el historial." : "Aplico la corrección sobre la versión vigente. La versión anterior queda en el historial.");
+        reply.refs = { jobId: launch(record, intent) };
     } else if (/(recuerda|guarda (?:este )?dato)/i.test(lower)) {
         const fact = text.replace(/^(recuerda(?: que)?|guarda (?:este )?dato(?: de que)?)\s*/i, "").trim() || text;
         const intent: MockIntent = { id: next("intent"), intentKind: "save_context", target: "package", deliverableTypes: [], state: "pending", contextProposal: { text: fact, scope: "unit", unitId: `unit_mock_context_${id}` }, unitId: `unit_mock_context_${id}` };
-        reply = add(record, "flu", "intent_to_confirm", "Puedo guardar ese dato para retomarlo en esta conversación.", { intent });
+        intent.state = "confirmed";
+        const contribution: ContextContribution = { id: next("fact"), unitId: intent.unitId!, text: fact, author: "Usuario demo", createdAt: now(), originChatId: id, sourceMessageId: userMessage.id, state: "active" };
+        record.facts.push(contribution);
+        reply = add(record, "flu", "text", "Lo guardé en el contexto de esta conversación. Ningún entregable cambió.", { refs: { contributionIds: [contribution.id] } });
     } else {
         const type: DeliverableType | undefined = /presentaci[oó]n/i.test(lower) ? "presentation" : /diagrama/i.test(lower) ? "diagram_as_is" : /diagn[oó]stico/i.test(lower) ? "diagnostic" : /pol[ií]tica/i.test(lower) ? "policy_draft" : record.awaiting;
         if (type && (text.length > 75 || record.awaiting === type)) {
@@ -178,6 +182,11 @@ export const mockConfirmChatIntent = (id: string, intentId: string): JobRef | Co
         add(record, "flu", "text", "Dato guardado en el contexto de esta demostración. Ningún entregable cambió.", { refs: { contributionIds: [contribution.id] } });
         return clone(contribution);
     }
+    return { jobId: launch(record, intent) };
+};
+
+/** Encola y completa el trabajo de una intención ya autorizada (demo local). */
+function launch(record: ChatRecord, intent: MockIntent): string {
     const type = intent.deliverableTypes[0];
     const unitId = intent.unitId ?? next("unit");
     const requestedName = intent.newUnit?.name;
@@ -199,8 +208,8 @@ export const mockConfirmChatIntent = (id: string, intentId: string): JobRef | Co
         status("done", `${typeLabel[type] ?? "Entregable"} listo`);
         add(record, "flu", "deliverable_card", `Puedes revisar la versión ${deliverable.currentVersion}.`, { unitId, refs: { jobId, deliverableIds: [deliverable.id] }, deliverableCard: { deliverableId: deliverable.id, deliverableType: type, status: "ready", outcome: "generated", version: { id: `ver_mock_${deliverable.currentVersion}`, number: deliverable.currentVersion }, summary: intent.revisionProposal ? `Incluye: ${intent.revisionProposal.request}` : `Borrador visual creado a partir de esta conversación.`, title: titleIn(intent.revisionProposal?.request ?? "") ?? requestedName ?? typeLabel[type] } as NonNullable<MockMessage["deliverableCard"]> & { title: string } });
     }, 1700);
-    return { jobId };
-};
+    return jobId;
+}
 export const mockGetChatMovePreview = (id: string, projectId: string): ChatMovePreview => {
     const record = must(id);
     const cards = record.messages.filter((item) => item.deliverableCard && item.unitId);

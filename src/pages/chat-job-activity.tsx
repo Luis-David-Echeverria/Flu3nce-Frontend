@@ -44,10 +44,10 @@ export function ChatJobActivity({ jobId, chatId, messages, projectId, canOperate
     const names = expectedTypes.length ? expectedTypes.map((type) => deliverableLabel(type).toLocaleLowerCase("es-MX")).join(" y ") : cards.map((item) => deliverableLabel(item.deliverableCard!.deliverableType).toLocaleLowerCase("es-MX")).join(" y ");
     const heading = failed ? verifiedJob?.error?.message ?? failure?.message ?? failedCard?.deliverableCard?.error?.message ?? "No se pudo completar el trabajo"
         : cancelled ? cancelReasonLabel(verifiedJob?.cancelReason)
-        : missingResult ? "El trabajo terminó sin devolver un resultado. Comparte el ID para revisarlo."
+        : missingResult ? "El trabajo terminó sin devolver un resultado."
         : partial ? `Se completaron ${partial.deliverablesGenerated} de ${partial.deliverablesExpected} entregables`
         : finished ? cards.length && names ? `Ya puedes consultar ${names}` : "Trabajo terminado"
-        : verifiedJob && (verifiedJob.status !== "running" || verifiedJob.stage) ? jobStatusLabel(verifiedJob) : latestStatus?.stepLabel ?? "Solicitud confirmada";
+        : verifiedJob && (verifiedJob.status !== "running" || verifiedJob.stage) ? jobStatusLabel(verifiedJob) : latestStatus?.stepLabel ?? "Trabajo en curso";
     const outcome = failed || missingResult ? "failed" : cancelled ? "cancelled" : partial ? "partial" : finished ? "done" : verifiedJob?.status === "paused" ? "paused" : verifiedJob?.status === "needs_input" ? "needs_user_input" : undefined;
     const group = messages.flatMap((message) => message.parts ?? []).find((part) => part.kind === "activity_group")?.activityGroup;
     const historicalSteps: LiveActivity[] = statusEvents.map((message, index) => ({ id: message.id, label: message.generationStatus!.stepLabel, kind: message.generationStatus!.stage ?? "job", state: index === statusEvents.length - 1 ? outcome ?? "running" : "done", ms: 0, durationUnknown: true, updatedAt: Date.parse(message.createdAt), jobId, expectHeartbeat: message.generationStatus?.phase !== "queued" }));
@@ -60,10 +60,10 @@ export function ChatJobActivity({ jobId, chatId, messages, projectId, canOperate
 
     return <article aria-label={`Actividad de generación: ${heading}`} className="flu-job-activity">
         {!covered ? group ? <SavedChatActivity group={group} force title={heading} outcome={outcome} /> : <ChatActivity items={steps} complete={!active} connection={connection} title={verifiedJob || !active ? heading : undefined} outcome={outcome} /> : null}
-        {verifiedJob ? <ChatJobDetails job={verifiedJob} projectId={projectId} canWrite={canOperate} /> : null}
+        {verifiedJob ? <ChatJobDetails job={verifiedJob} /> : null}
         {renderCards ? cards.map((item) => item.unitId ? <div key={`${item.deliverableCard!.deliverableId}-${item.deliverableCard!.version?.id ?? "pending"}`} className="flu-activity-deliverable"><ConsultationDeliverableCard card={item.deliverableCard!} projectId={projectId} unitId={item.unitId} onOpenPanel={onOpenDeliverable ? () => onOpenDeliverable(item.deliverableCard!, item.unitId!) : undefined} /></div> : null) : null}
         {verifiedJob?.error?.retryable !== false ? cards.filter((item) => item.deliverableCard?.retryIntentId).map((item) => canOperate ? <button key={`retry-${item.deliverableCard!.deliverableId}`} type="button" disabled={busy} onClick={() => onRetry(item.deliverableCard!.retryIntentId!)} className="flu-activity-retry">Reintentar {deliverableLabel(item.deliverableCard!.deliverableType)}</button> : null) : null}
-        {verifiedJob?.error?.retryable !== false && failure?.safeAction === "retry" && failure.retryIntentId && canOperate ? <button type="button" disabled={busy} onClick={() => onRetry(failure.retryIntentId!)} className="flu-activity-retry">Confirmar reintento</button> : null}
+        {verifiedJob?.error?.retryable !== false && failure?.safeAction === "retry" && failure.retryIntentId && !cards.some((item) => item.deliverableCard?.retryIntentId === failure.retryIntentId) && canOperate ? <button type="button" disabled={busy} onClick={() => onRetry(failure.retryIntentId!)} className="flu-activity-retry">Reintentar</button> : null}
         {showReferences && referenceMessage ? <ChatReference chatId={chatId} messageId={referenceMessage.id} jobId={jobId} /> : null}
     </article>;
 }

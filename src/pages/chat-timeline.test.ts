@@ -38,7 +38,7 @@ describe("historial visual de un trabajo", () => {
         expect(timeline.map((item) => item.type)).toEqual(["message", "message"]);
     });
 
-    it("no absorbe las tarjetas dentro de la actividad ni reordena los comentarios entre entregables", () => {
+    it("pone la actividad antes de lo que produjo, sin absorber tarjetas ni reordenar los comentarios", () => {
         const card = (id: string): ChatMessage => message(id, { kind: "deliverable_card", refs: { jobId: "j1" }, deliverableCard: { deliverableId: id, deliverableType: "policy_draft", outcome: "generated", version: { id: `v-${id}`, number: 1 } } });
         const timeline = buildChatTimeline([
             message("queued", { kind: "generation_status", generationStatus: { jobId: "j1", target: "deliverable", phase: "queued", stepLabel: "Preparando" } }),
@@ -46,6 +46,6 @@ describe("historial visual de un trabajo", () => {
             message("explicacion", { role: "flu", text: "Con esa política preparo la presentación." }),
             card("presentacion"),
         ]);
-        expect(timeline.map((entry) => entry.type === "job" ? "actividad" : entry.message.id)).toEqual(["politica", "explicacion", "presentacion", "actividad"]);
+        expect(timeline.map((entry) => entry.type === "job" ? "actividad" : entry.message.id)).toEqual(["actividad", "politica", "explicacion", "presentacion"]);
     });
 });

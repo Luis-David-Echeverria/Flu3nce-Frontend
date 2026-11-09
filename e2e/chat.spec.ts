@@ -64,3 +64,34 @@ test("en modo oscuro usa los tokens oscuros", async ({ page }, testInfo) => {
     await capture(page, testInfo, "chat-oscuro");
     expect(errors).toEqual([]);
 });
+
+test("lo pedido se genera sin botón de confirmar y deja el entregable en el chat", async ({ page }, testInfo) => {
+    const errors = watchErrors(page);
+    await startChat(page, "Quiero una política de compras menores");
+    await page.getByLabel("Mensaje para Flu3nce").fill("Aplica a todas las áreas; compras menores de $10,000 requieren aprobación de Dirección.");
+    await page.getByRole("button", { name: "Enviar mensaje" }).click();
+    await expect(page.getByText("Voy a preparar el borrador de política con lo conversado.")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Confirmar/ })).toHaveCount(0);
+    await expect(page.getByText(/Puedes revisar la versión 1/).first()).toBeVisible({ timeout: 15_000 });
+    await capture(page, testInfo, "chat-generado");
+    expect(errors).toEqual([]);
+});
+
+
+for (const view of [{ name: "bienvenida-claro", width: 1280, dark: false }, { name: "bienvenida-oscuro", width: 1280, dark: true }, { name: "bienvenida-390", width: 390, dark: false }]) {
+    test(`la bienvenida ofrece todas las capacidades (${view.name})`, async ({ page }, testInfo) => {
+        const errors = watchErrors(page);
+        if (view.dark) await page.addInitScript(() => window.localStorage.setItem("ui-theme", "dark"));
+        await page.setViewportSize({ width: view.width, height: 844 });
+        await page.goto("/flu");
+        await expect(page.getByRole("heading", { name: "¿Qué quieres trabajar hoy?" })).toBeVisible();
+        const capabilities = page.getByRole("group", { name: "Lo que Flu3nce puede hacer contigo" }).getByRole("button");
+        await expect(capabilities).toHaveCount(9);
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+        expect(overflow).toBeLessThanOrEqual(0);
+        await capture(page, testInfo, view.name);
+        await capabilities.filter({ hasText: "Ayúdame a traducir un documento" }).click();
+        await expect(page.getByLabel("Tu primer mensaje")).toHaveValue("Ayúdame a traducir un documento");
+        expect(errors).toEqual([]);
+    });
+}

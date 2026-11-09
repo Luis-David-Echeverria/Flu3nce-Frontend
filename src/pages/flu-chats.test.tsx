@@ -154,7 +154,7 @@ describe("pantalla de chats QA", () => {
         expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
 
-    it("conserva el texto si la única parte guardada es la actividad y la deja plegada al final", async () => {
+    it("conserva el texto si la única parte guardada es la actividad y la deja plegada antes de la respuesta", async () => {
         getChat.mockResolvedValue({ chat, freeMessagesEnabled: true, messages: [{ id: "reply", createdAt: "2026-10-15T10:00:00Z", role: "flu", kind: "text", text: "Respuesta completa.", parts: [{ kind: "activity_group", activityGroup: { collapsed: true, items: [{ label: "Generando archivo", kind: "generating_file", state: "done", ms: 1500 }] } }] }] });
         render(<MemoryRouter initialEntries={["/flu?chat=chat_1"]}><FluChatsPage /></MemoryRouter>);
         expect(await screen.findByText("Respuesta completa.")).toBeInTheDocument();
@@ -217,20 +217,24 @@ describe("pantalla de chats QA", () => {
         expect(screen.queryByText("detalle interno del servidor")).not.toBeInTheDocument();
     });
 
-    it("crea un chat suelto al elegir una sugerencia, sin formulario de nombre", async () => {
+    it("ofrece todas las capacidades en la bienvenida y escribe la elegida sin enviarla", async () => {
         render(<MemoryRouter initialEntries={["/flu"]}><FluChatsPage /></MemoryRouter>);
-        expect(await screen.findByText("¿Qué quieres construir hoy?")).toBeInTheDocument();
+        expect(await screen.findByText("¿Qué quieres trabajar hoy?")).toBeInTheDocument();
+        const capabilities = screen.getByRole("group", { name: "Lo que Flu3nce puede hacer contigo" });
+        for (const name of ["Ayúdame a armar mi proceso", "Ayúdame a dibujar el diagrama de mi proceso", "Ayúdame a redactar una política", "Ayúdame a preparar una presentación", "Ayúdame a traducir un documento", "Ayúdame a transcribir una grabación"]) {
+            expect(within(capabilities).getByRole("button", { name })).toBeInTheDocument();
+        }
         expect(screen.queryByText("Elegir el nombre del chat")).not.toBeInTheDocument();
+        fireEvent.click(within(capabilities).getByRole("button", { name: "Ayúdame a traducir un documento" }));
+        expect(screen.getByRole("textbox", { name: "Tu primer mensaje" })).toHaveValue("Ayúdame a traducir un documento");
         expect(createChat).not.toHaveBeenCalled();
-        expect(screen.queryByText(/Podemos explorar una idea/)).not.toBeInTheDocument();
-        expect(screen.queryByText(/Los entregables y los aportes confirmados/)).not.toBeInTheDocument();
-        fireEvent.click(screen.getByRole("button", { name: /Ayúdame a crear un documento/ }));
-        await waitFor(() => expect(createChat).toHaveBeenCalledWith("Ayúdame a crear un documento", undefined));
+        fireEvent.click(screen.getByRole("button", { name: "Enviar primer mensaje" }));
+        await waitFor(() => expect(createChat).toHaveBeenCalledWith("Ayúdame a traducir un documento", undefined));
     });
 
     it("muestra el botón de abrir navegación solo cuando la barra está plegada", async () => {
         render(<MemoryRouter initialEntries={["/flu"]}><FluChatsPage /></MemoryRouter>);
-        await screen.findByText("¿Qué quieres construir hoy?");
+        await screen.findByText("¿Qué quieres trabajar hoy?");
         expect(screen.queryByRole("button", { name: "Abrir navegación" })).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole("button", { name: "Plegar navegación" }));
         expect(screen.getByRole("button", { name: "Abrir navegación" })).toBeInTheDocument();
@@ -240,7 +244,7 @@ describe("pantalla de chats QA", () => {
 
     it("inicia con el contexto cerrado y lo abre solo al pedirlo", async () => {
         render(<MemoryRouter initialEntries={["/flu"]}><FluChatsPage /></MemoryRouter>);
-        await screen.findByText("¿Qué quieres construir hoy?");
+        await screen.findByText("¿Qué quieres trabajar hoy?");
         const context = screen.getByLabelText("Contexto del chat");
         expect(context).toHaveAttribute("aria-hidden", "true");
         expect(screen.getByRole("button", { name: "Contexto" })).toHaveAttribute("aria-expanded", "false");
@@ -327,7 +331,7 @@ describe("pantalla de chats QA", () => {
 
     it("mantiene el archivo en la bandeja y pide un prompt antes de abrir el lote", async () => {
         render(<MemoryRouter initialEntries={["/flu"]}><FluChatsPage /></MemoryRouter>);
-        expect(await screen.findByText("¿Qué quieres construir hoy?")).toBeInTheDocument();
+        expect(await screen.findByText("¿Qué quieres trabajar hoy?")).toBeInTheDocument();
         const file = new File(["contenido de prueba"], "contexto.pdf", { type: "application/pdf" });
         fireEvent.change(screen.getByLabelText("Seleccionar archivos para el chat"), { target: { files: [file] } });
         expect(screen.getByLabelText("Archivos pendientes de enviar")).toHaveTextContent("contexto.pdf");
@@ -402,7 +406,7 @@ describe("pantalla de chats QA", () => {
         await waitFor(() => expect(screen.queryByTitle("Nueva respuesta de Flu3nce")).not.toBeInTheDocument());
     });
 
-    it("no inicia un job por texto libre y exige botón para confirmar", async () => {
+    it("una propuesta sin motivo no se confirma: se marca como tarea no ejecutada", async () => {
         getChat.mockResolvedValue({
             chat, freeMessagesEnabled: true,
             messages: [{
@@ -412,12 +416,40 @@ describe("pantalla de chats QA", () => {
             }],
         });
         render(<MemoryRouter initialEntries={["/flu?chat=chat_1"]}><FluChatsPage /></MemoryRouter>);
-        expect(await screen.findByText("Te propongo preparar política.")).toBeInTheDocument();
+        expect(await screen.findByText("Esta tarea no se ejecutó: quedó esperando una confirmación que ya no se usa.")).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /Confirmar/ })).not.toBeInTheDocument();
+        expect(screen.queryByText(/Acción propuesta/)).not.toBeInTheDocument();
+    });
+
+    it("la confirmación necesaria aparece al final, en espera, y un sí escrito no la ejecuta", async () => {
+        getChat.mockResolvedValue({
+            chat, freeMessagesEnabled: true,
+            messages: [{
+                id: "m_1", createdAt: "2026-10-15T10:01:00Z", role: "flu", kind: "intent_to_confirm",
+                text: "La presentación usa Gamma.",
+                intent: { id: "intent_1", intentKind: "generate", target: "deliverable", deliverableTypes: ["presentation"], newUnit: { name: "Resumen", kind: "presentation" }, state: "pending", reason: "external_cost" },
+            }],
+        });
+        render(<MemoryRouter initialEntries={["/flu?chat=chat_1"]}><FluChatsPage /></MemoryRouter>);
+        expect(await screen.findByText("En espera de tu confirmación")).toBeInTheDocument();
+        expect(screen.getByText(/servicio externo con coste/)).toBeInTheDocument();
         fireEvent.change(screen.getByRole("textbox", { name: "Mensaje para Flu3nce" }), { target: { value: "sí" } });
         fireEvent.click(screen.getByRole("button", { name: "Enviar mensaje" }));
         await waitFor(() => expect(sendChatMessage).toHaveBeenCalledTimes(1));
         expect(confirmChatIntent).not.toHaveBeenCalled();
-        fireEvent.click(screen.getByRole("button", { name: "Confirmar generación" }));
+    });
+
+    it("confirma una acción con motivo solo desde su botón", async () => {
+        getChat.mockResolvedValue({
+            chat, freeMessagesEnabled: true,
+            messages: [{
+                id: "m_1", createdAt: "2026-10-15T10:01:00Z", role: "flu", kind: "intent_to_confirm",
+                text: "La presentación usa Gamma.",
+                intent: { id: "intent_1", intentKind: "generate", target: "deliverable", deliverableTypes: ["presentation"], newUnit: { name: "Resumen", kind: "presentation" }, state: "pending", reason: "external_cost" },
+            }],
+        });
+        render(<MemoryRouter initialEntries={["/flu?chat=chat_1"]}><FluChatsPage /></MemoryRouter>);
+        fireEvent.click(await screen.findByRole("button", { name: "Confirmar y continuar" }));
         await waitFor(() => expect(confirmChatIntent).toHaveBeenCalledWith("chat_1", "intent_1", false));
     });
 
@@ -436,7 +468,7 @@ describe("pantalla de chats QA", () => {
         expect(await screen.findByText(/2 destinos propuestos para 2 entregables/)).toBeInTheDocument();
         expect(screen.getByText(/Política de cobro/)).toBeInTheDocument();
         expect(screen.getByText(/Presentación ejecutiva/)).toBeInTheDocument();
-        fireEvent.click(screen.getByRole("button", { name: "Confirmar generación" }));
+        fireEvent.click(screen.getByRole("button", { name: "Confirmar y continuar" }));
         await waitFor(() => expect(confirmChatIntent).toHaveBeenCalledWith("chat_1", "intent_package", false));
     });
 
@@ -450,7 +482,7 @@ describe("pantalla de chats QA", () => {
             intent: { id: "intent_1", intentKind: "generate", target: "deliverable", deliverableTypes: ["policy_draft"], newUnit: { name: "Cobro", kind: "policy" }, state: "pending" },
         }] });
         render(<MemoryRouter initialEntries={["/flu?chat=chat_1"]}><FluChatsPage /></MemoryRouter>);
-        expect(await screen.findByText("Te propongo preparar política.")).toBeInTheDocument();
+        expect(await screen.findByText("Esta tarea no se ejecutó: quedó esperando una confirmación que ya no se usa.")).toBeInTheDocument();
         expect(screen.queryByText(/escribir sí no la ejecuta/)).not.toBeInTheDocument();
         fireEvent.change(screen.getByRole("textbox", { name: "Mensaje para Flu3nce" }), { target: { value: "Antes, explícame la fuente" } });
         fireEvent.click(screen.getByRole("button", { name: "Enviar mensaje" }));
@@ -493,7 +525,7 @@ describe("pantalla de chats QA", () => {
 
     it("permite ajustar la navegación con el teclado", async () => {
         render(<MemoryRouter initialEntries={["/flu"]}><FluChatsPage /></MemoryRouter>);
-        await screen.findByText("¿Qué quieres construir hoy?");
+        await screen.findByText("¿Qué quieres trabajar hoy?");
         const handle = screen.getByRole("separator", { name: "Ajustar ancho de navegación" });
         expect(handle).toHaveAttribute("aria-valuenow", "274");
         fireEvent.keyDown(handle, { key: "ArrowRight" });
@@ -557,7 +589,7 @@ describe("pantalla de chats QA", () => {
         expect(panel).not.toHaveClass("is-maximized");
     });
 
-    it("expone un fallo técnico con reintento confirmable, no como pregunta", async () => {
+    it("expone un fallo técnico con su reintento, no como pregunta", async () => {
         getChat.mockResolvedValue({ chat, freeMessagesEnabled: true, messages: [{
             id: "m_failed", createdAt: "2026-10-15T10:01:00Z", role: "system", kind: "technical_failure",
             text: "No se pudo generar el entregable.",
@@ -566,7 +598,7 @@ describe("pantalla de chats QA", () => {
         render(<MemoryRouter initialEntries={["/flu?chat=chat_1"]}><FluChatsPage /></MemoryRouter>);
         expect(await screen.findByText("No se pudo producir un diagrama válido.")).toBeInTheDocument();
         expect(confirmChatIntent).not.toHaveBeenCalled();
-        fireEvent.click(screen.getByRole("button", { name: "Confirmar reintento" }));
+        fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
         await waitFor(() => expect(confirmChatIntent).toHaveBeenCalledWith("chat_1", "intent_retry", false));
     });
 

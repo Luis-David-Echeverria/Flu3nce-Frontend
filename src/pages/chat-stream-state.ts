@@ -4,9 +4,10 @@ import type { Card } from "@/components/custom/consultation-deliverable-card";
 import type { ChainActivityStage, PermissionPending } from "@/services/v2/types";
 
 export type ActivityGroup = components["schemas"]["ActivityGroup"];
-export type LiveActivity = { id: string; label: string; kind: string; state: string; ms: number; updatedAt: number; jobId?: string; requestId?: string; seq?: number; stage?: string; title?: string; replyId?: string; intentId?: string; chatId?: string; waitingFor?: components["schemas"]["JobWaitingFor"]; stages?: ChainActivityStage[]; folded?: boolean; expectHeartbeat?: boolean; durationUnknown?: boolean; progress?: { done: number; total: number; unit: string } };
-export type LivePart = { id: string; index: number; kind: string; blocks: { seq: number; text: string }[]; card?: Card; explanation?: string };
-export type LiveTurn = { chatId: string; clientMessageId: string; prompt: string; accepted: boolean; phaseB: boolean; turnId?: string; userMessageId?: string; replyId?: string; requestId?: string; jobIds?: string[]; outcome?: components["schemas"]["ConsultationExchange"]["outcome"]; failure?: components["schemas"]["TurnFailure"]; permissionsPending?: PermissionPending[]; state: "running" | "done" | "failed" | "cancelled" | "interrupted"; parts: LivePart[]; activities: LiveActivity[]; legacyText: string; seen: string[]; startedAt: number; cancelRequested?: boolean };
+export type LiveActivity = { id: string; label: string; kind: string; state: string; ms: number; updatedAt: number; jobId?: string; requestId?: string; seq?: number; stage?: string; title?: string; replyId?: string; intentId?: string; chatId?: string; waitingFor?: components["schemas"]["JobWaitingFor"]; stages?: ChainActivityStage[]; folded?: boolean; expectHeartbeat?: boolean; durationUnknown?: boolean; progress?: { done: number; total: number; unit: string }; order?: number };
+/** `order`: orden de llegada en el turno, para intercalar texto, actividad y tarjetas como ocurrieron. */
+export type LivePart = { id: string; index: number; kind: string; blocks: { seq: number; text: string }[]; card?: Card; explanation?: string; order?: number };
+export type LiveTurn = { chatId: string; clientMessageId: string; prompt: string; accepted: boolean; phaseB: boolean; turnId?: string; userMessageId?: string; replyId?: string; requestId?: string; jobIds?: string[]; outcome?: components["schemas"]["ConsultationExchange"]["outcome"]; failure?: components["schemas"]["TurnFailure"]; permissionsPending?: PermissionPending[]; state: "running" | "done" | "failed" | "cancelled" | "interrupted"; parts: LivePart[]; activities: LiveActivity[]; legacyText: string; seen: string[]; startedAt: number; cancelRequested?: boolean; nextOrder?: number };
 export const beginLiveTurn = (chatId: string, clientMessageId: string, prompt: string): LiveTurn => ({ chatId, clientMessageId, prompt, accepted: false, phaseB: false, state: "running", parts: [], activities: [], legacyText: "", seen: [], startedAt: Date.now() });
 
 export function reduceActivity(items: LiveActivity[], event: ChatStreamEvent, now = Date.now()): LiveActivity[] {
@@ -39,7 +40,11 @@ export function reduceActivity(items: LiveActivity[], event: ChatStreamEvent, no
 export function reduceLiveTurn(current: LiveTurn, event: ChatStreamEvent, now = Date.now()): LiveTurn {
     if (["cancelled", "done", "failed"].includes(current.state)) return current;
     if (current.cancelRequested && ["text", "text.block", "deliverable.card", "part.start", "part.end"].includes(event.event)) return current;
-    if (event.event.startsWith("activity.")) return { ...current, activities: reduceActivity(current.activities, event, now) };
+    if (event.event.startsWith("activity.")) {
+        let order = current.nextOrder ?? 0;
+        const activities = reduceActivity(current.activities, event, now).map((item) => item.order !== undefined ? item : { ...item, order: order++ });
+        return { ...current, activities, nextOrder: order };
+    }
     const data = event.data, key = typeof data.seq === "number" ? `${event.event}:${data.seq}` : undefined;
     if (key && current.seen.includes(key)) return current;
     const next = { ...current, seen: key ? [...current.seen, key] : current.seen };
@@ -49,15 +54,18 @@ export function reduceLiveTurn(current: LiveTurn, event: ChatStreamEvent, now = 
     if (event.event === "text") return { ...next, legacyText: next.legacyText + (typeof data.delta === "string" ? data.delta : "") };
     if (event.event === "part.start" && typeof data.partId === "string") {
         if (next.parts.some((part) => part.id === data.partId)) return next;
-        return { ...next, phaseB: true, parts: [...next.parts, { id: data.partId, index: Number(data.index ?? next.parts.length), kind: String(data.kind ?? "text"), blocks: [] }].sort((a, b) => a.index - b.index) };
+        const order = next.nextOrder ?? 0;
+        return { ...next, phaseB: true, nextOrder: order + 1, parts: [...next.parts, { id: data.partId, index: Number(data.index ?? next.parts.length), kind: String(data.kind ?? "text"), blocks: [], order }].sort((a, b) => a.index - b.index) };
     }
     if ((event.event === "text.block" || event.event === "deliverable.card") && typeof data.partId === "string") {
-        const parts = next.parts.some((part) => part.id === data.partId) ? next.parts : [...next.parts, { id: data.partId, index: next.parts.length, kind: event.event === "text.block" ? "text" : "deliverable_card", blocks: [] }];
-        return { ...next, phaseB: true, parts: parts.map((part) => part.id !== data.partId ? part : event.event === "text.block" ? { ...part, blocks: [...part.blocks, { seq: Number(data.seq ?? part.blocks.length), text: String(data.markdown ?? "") }].sort((a, b) => a.seq - b.seq) } : { ...part, card: data.deliverableCard as Card, explanation: typeof data.explanation === "string" ? data.explanation : undefined }) };
+        const known = next.parts.some((part) => part.id === data.partId);
+        const order = next.nextOrder ?? 0;
+        const parts = known ? next.parts : [...next.parts, { id: data.partId, index: next.parts.length, kind: event.event === "text.block" ? "text" : "deliverable_card", blocks: [], order }];
+        return { ...next, phaseB: true, nextOrder: known ? order : order + 1, parts: parts.map((part) => part.id !== data.partId ? part : event.event === "text.block" ? { ...part, blocks: [...part.blocks, { seq: Number(data.seq ?? part.blocks.length), text: String(data.markdown ?? "") }].sort((a, b) => a.seq - b.seq) } : { ...part, card: data.deliverableCard as Card, explanation: typeof data.explanation === "string" ? data.explanation : undefined }) };
     }
     if (event.event === "message") {
         const exchange = data as unknown as components["schemas"]["ConsultationExchange"];
-        return { ...next, replyId: exchange.reply?.id, userMessageId: exchange.userMessage?.id, requestId: exchange.nucleo?.requestId, outcome: exchange.outcome, failure: exchange.failure, permissionsPending: exchange.permissionsPending, jobIds: exchange.reply?.refs?.jobId ? [exchange.reply.refs.jobId] : [] };
+        return { ...next, replyId: exchange.reply?.id, userMessageId: exchange.userMessage?.id, requestId: exchange.nucleo?.requestId, outcome: exchange.outcome, failure: exchange.failure, permissionsPending: exchange.permissionsPending, jobIds: [...new Set([...(exchange.reply?.refs?.jobIds ?? []), ...(exchange.reply?.refs?.jobId ? [exchange.reply.refs.jobId] : [])])] };
     }
     if (event.event === "done" || event.event === "cancelled") {
         const cancelled = event.event === "cancelled";

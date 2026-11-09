@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { waitFor } from "@testing-library/react";
 import * as api from "@/services/v2/upload-batches";
 import { ApiServiceError } from "@/services/v2/http";
-import { MAX_UPLOAD_BYTES, UploadBatchManager, validateUploadFiles } from "./upload-batch-manager";
+import { MAX_UPLOAD_BYTES, UploadBatchManager, sameFileName, validateUploadFiles } from "./upload-batch-manager";
 
 vi.mock("@/services/v2/upload-batches", () => ({ createUploadBatch: vi.fn(), getUploadBatch: vi.fn(), getUpload: vi.fn(), completeUpload: vi.fn(), cancelUpload: vi.fn(), cancelUploadBatch: vi.fn(), uploadPart: vi.fn(), sha256: vi.fn().mockResolvedValue("a".repeat(64)), fileFingerprint: vi.fn().mockResolvedValue("fingerprint") }));
 let manager: UploadBatchManager;
@@ -102,5 +102,12 @@ describe("subida por partes con un solo prompt", () => {
         expect(() => validateUploadFiles([file])).toThrow(/3 GB/);
         expect(() => manager.start("chat", "Resume", Array.from({ length: 11 }, () => new File(["x"], "doc.pdf")))).toThrow(/10 archivos/);
         expect(api.createUploadBatch).not.toHaveBeenCalled();
+    });
+});
+
+describe("nombres de archivo con acentos", () => {
+    it("reconoce el mismo nombre en forma compuesta y descompuesta", () => {
+        expect(sameFileName("Políticas de compañía.pdf", "Políticas de compañía.pdf".normalize("NFD"))).toBe(true);
+        expect(sameFileName("Minuta.pdf", "Minuta (2).pdf")).toBe(false);
     });
 });

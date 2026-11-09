@@ -65,8 +65,9 @@ import { FluChatContext } from "./flu-chat-context";
 import { FluSourceTools } from "./flu-source-tools";
 import { FluSourcePreview } from "./flu-source-preview";
 import "./flu-chats.css";
-import { ChatIcon, ContextIcon, EditIcon, FolderIcon } from "./flu-chats-icons";
-import { ChatUserError, cardTitle, chatErrorForUser, type ChatMessage } from "./flu-chats-helpers";
+import { ChatIcon, ContextIcon, DeliverableTypeIcon, EditIcon, FolderIcon } from "./flu-chats-icons";
+import { WELCOME_CAPABILITIES } from "./flu-capabilities";
+import { ChatUserError, ShownInTurnError, cardTitle, chatErrorForUser, type ChatMessage } from "./flu-chats-helpers";
 
 /** Interfaz conversacional sobre el contrato real /chats. */
 export const FluChatsPage = () => {
@@ -521,7 +522,8 @@ export const FluChatsPage = () => {
         setNotice(null);
         try { await work(); }
         catch (caught) {
-            setError(chatErrorForUser(caught, fallback));
+            // Lo que ya se ve en la respuesta en curso (fallo o conexión interrumpida) no se repite arriba.
+            if (!(caught instanceof ShownInTurnError)) setError(chatErrorForUser(caught, fallback));
             if (caught instanceof ApiServiceError && caught.code === "model_not_available") {
                 void refreshModels();
             }
@@ -533,8 +535,8 @@ export const FluChatsPage = () => {
     const rememberExchange = (targetChatId: string, exchange: ChatExchange) => {
         if (activeChatId.current !== targetChatId || !exchange.reply?.id) return;
         setExchangeMetadata((current) => ({ ...current, [exchange.reply.id]: { requestId: exchange.nucleo?.requestId, failure: exchange.failure, permissionsPending: exchange.permissionsPending } }));
-        const jobId = exchange.reply.refs?.jobId ?? exchange.reply.intent?.jobId;
-        if (jobId) setAnnouncedJobs((current) => new Set(current).add(jobId));
+        const jobIds = [...(exchange.reply.refs?.jobIds ?? []), exchange.reply.refs?.jobId ?? exchange.reply.intent?.jobId].filter((jobId): jobId is string => !!jobId);
+        if (jobIds.length) setAnnouncedJobs((current) => new Set([...current, ...jobIds]));
     };
 
     const sendPrompt = async (targetChatId: string, prompt: string, attachmentIds: string[] = []) => {
@@ -584,7 +586,8 @@ export const FluChatsPage = () => {
                 if (controller.signal.aborted && connection.cancellationConfirmed) return { cancelled: true as const, turnId: connection.turnId ?? "" };
                 updateLiveTurn((current) => current?.clientMessageId === id && !["cancelled", "failed"].includes(current.state) ? { ...current, state: "interrupted" } : current);
                 if (activeChatId.current === targetChatId) void refreshChat();
-                throw error;
+                const shown = liveTurnRef.current?.clientMessageId === id && (liveTurnRef.current.state === "interrupted" || (liveTurnRef.current.state === "failed" && !!liveTurnRef.current.failure));
+                throw shown ? new ShownInTurnError(error instanceof Error ? error.message : "") : error;
             } finally { if (turnConnection.current?.clientMessageId === id) turnConnection.current = null; }
             streamEnabled.current = false;
         }
@@ -631,6 +634,15 @@ export const FluChatsPage = () => {
             catch (error) { setError(error instanceof Error ? error.message : "No se pudieron añadir estos archivos."); }
     };
 
+    /** Escribe el inicio de una petición en el compositor de bienvenida, sin enviarla. */
+    const startWith = (prompt: string) => {
+        setFirstMessage(prompt);
+        window.requestAnimationFrame(() => {
+            const box = document.getElementById("flu-first-message");
+            if (box instanceof HTMLTextAreaElement) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
+        });
+    };
+
     const startFromMessage = (text: string) => void run(async () => {
         const prompt = text.trim();
         const files = [...stagedFiles];
@@ -647,9 +659,9 @@ export const FluChatsPage = () => {
             clearSentFirstMessage(scope, prompt);
             setStagedFiles([]);
 
-        } catch {
+        } catch (caught) {
             restoreSentDraft(`chat:${chat.id}`, prompt);
-            setError("El chat se creó, pero no se completó el envío. Revisa los archivos del chat antes de reintentar.");
+            if (!(caught instanceof ShownInTurnError)) setError("El chat se creó, pero no se completó el envío. Revisa los archivos del chat antes de reintentar.");
         }
         await getChat(chat.id).then((next) => { latestMessageId.current = next.messages[0]?.id; setSession(next); }).catch(() => undefined);
     }, "No se pudo iniciar la conversación.");
@@ -729,8 +741,9 @@ export const FluChatsPage = () => {
                     }
                 }
             }
+            let externalContinues = false;
             for (const id of ids) if (!stopped.has(id)) {
-                try { await cancelJob(id); }
+                try { const result = await cancelJob(id); if (result.effect === "cancelled_external_continues") externalContinues = true; }
                 catch (error) {
                     if (error instanceof ApiServiceError && error.code === "job_control_via_parent" && typeof (error.detail as { parentJobId?: string })?.parentJobId === "string") {
                         const parent = (error.detail as { parentJobId: string }).parentJobId;
@@ -738,7 +751,7 @@ export const FluChatsPage = () => {
                     } else if (!(error instanceof ApiServiceError && error.code === "job_not_cancellable")) throw error;
                 }
             }
-            setNotice(alreadyFinished && !ids.length ? "La respuesta ya había terminado." : saved ? `Flu3nce se detuvo. ${saved} ${saved === 1 ? "versión ya estaba guardada y se conserva" : "versiones ya estaban guardadas y se conservan"}.` : "Flu3nce se detuvo.");
+            setNotice(externalContinues ? "Flu3nce se detuvo. El servicio externo puede terminar su parte, pero el resultado no se va a publicar." : alreadyFinished && !ids.length ? "La respuesta ya había terminado." : saved ? `Flu3nce se detuvo. ${saved} ${saved === 1 ? "versión ya estaba guardada y se conserva" : "versiones ya estaban guardadas y se conservan"}.` : "Flu3nce se detuvo.");
             await refreshChat();
         } catch (error) {
             setStoppedJobs((current) => new Set([...current].filter((id) => !ids.includes(id))));
@@ -902,8 +915,8 @@ export const FluChatsPage = () => {
                 <div className="flu-welcome-card">
                     <div className="flu-welcome-icon" aria-hidden="true">✧</div>
                     <span className="flu-eyebrow">TU ESPACIO DE CONSULTORÍA</span>
-                    <h1>¿Qué quieres construir hoy?</h1>
-                    <div className="flu-suggestions">{["Ayúdame a crear un documento", "Quiero entender y mejorar un proceso", "Tengo archivos; ayúdame a empezar"].map((example) => <button key={example} type="button" disabled={busy || unavailable || !canStartInScope} onClick={() => startFromMessage(example)}>{example}<span aria-hidden="true">→</span></button>)}</div>
+                    <h1>¿Qué quieres trabajar hoy?</h1>
+                    <div className="flu-suggestions" role="group" aria-label="Lo que Flu3nce puede hacer contigo">{WELCOME_CAPABILITIES.map((capability) => <button key={capability.prompt} type="button" disabled={unavailable || !canStartInScope} onClick={() => startWith(capability.prompt)}>{capability.type ? <DeliverableTypeIcon type={capability.type} /> : <ChatIcon />}{capability.prompt}</button>)}</div>
                     <ChatComposer id="flu-first-message" value={firstMessage} onChange={setFirstMessage} onSubmit={() => startFromMessage(firstMessage)} onAttach={() => sourceInput.current?.click()} attachments={stagedFiles} onRemoveAttachment={(index) => setStagedFiles((items) => items.filter((_, position) => position !== index))} modelControls={modelControls} modelStatus={modelStatus} disabled={unavailable || !canStartInScope} sendBlocked={busy} attachDisabled={busy || unavailable || !canStartInScope || !hasCapability(user, "attachments_multiple")} label="Tu primer mensaje" submitLabel="Enviar primer mensaje" placeholder="Escribe lo que quieras explorar…" />
                 </div>
             </div> : session ? <>
@@ -940,13 +953,13 @@ export const FluChatsPage = () => {
                             />;
                         })}
 
+                        {visibleLiveTurn?.accepted && !visibleLiveTurn.userMessageId && !messages.some((message) => message.role === "user" && message.text === visibleLiveTurn.prompt && Date.parse(message.createdAt) >= visibleLiveTurn.startedAt) ? <article className="flu-message flu-user ml-auto px-4 py-3 text-sm">{visibleLiveTurn.prompt}</article> : null}
+                        {visibleLiveTurn ? <ChatStreamResponse turn={visibleLiveTurn} showReferences={showReferences} onOpenDeliverable={openPartDeliverable} /> : null}
+                        {activity && !visibleLiveTurn?.phaseB ? <div role="status" className="flu-thinking">{activity}<span aria-hidden="true" className="flu-thinking-dots"><i /><i /><i /></span></div> : null}
                         {orphanJobActivities.length ? <ChatActivity items={orphanJobActivities.map((item) => {
                             const state = verifiedJobs[item.jobId!]?.status ?? (stoppedJobs.has(item.jobId!) ? "cancelled" : undefined);
                             return state && ["running", "pending"].includes(item.state) ? { ...item, state } : item;
                         })} connection={chatEvents.connection} /> : null}
-                        {activity && !visibleLiveTurn?.phaseB ? <div role="status" className="flu-thinking">{activity}<span aria-hidden="true" className="flu-thinking-dots"><i /><i /><i /></span></div> : null}
-                        {visibleLiveTurn?.accepted && !visibleLiveTurn.userMessageId && !messages.some((message) => message.role === "user" && message.text === visibleLiveTurn.prompt && Date.parse(message.createdAt) >= visibleLiveTurn.startedAt) ? <article className="flu-message flu-user ml-auto px-4 py-3 text-sm">{visibleLiveTurn.prompt}</article> : null}
-                        {visibleLiveTurn ? <ChatStreamResponse turn={visibleLiveTurn} showReferences={showReferences} onOpenDeliverable={openPartDeliverable} /> : null}
                     </div>
                 </div>
                 {showScrollBottom ? <button type="button" onClick={scrollToChatBottom} className={`flu-chat-scroll-bottom ${newReplyBelow ? "has-new-reply" : ""}`} aria-label={newReplyBelow ? "Nueva respuesta de Flu3nce: ir al final" : "Ir al final de la conversación"} title={newReplyBelow ? "Nueva respuesta de Flu3nce" : "Ir al final de la conversación"}><ArrowDown aria-hidden="true" />{newReplyBelow ? <span className="flu-chat-scroll-unread" aria-hidden="true" /> : null}</button> : null}
@@ -967,7 +980,7 @@ export const FluChatsPage = () => {
             sourcesError={sourcesError}
             onOpenSource={openSource}
             onLoadMoreSources={() => void run(async () => { const page = await listChatSources(chatId, sourcesCursor); setSources((current) => [...current, ...page.sources.filter((next) => !current.some((item) => item.id === next.id))]); setSourcesCursor(page.nextCursor); }, "No se pudieron cargar más fuentes.")}
-            sourceTools={session && !isMockMode ? <FluSourceTools chatId={session.chat.id} projectId={session.chat.projectId} unassigned={session.chat.unassigned} canWrite={canWrite && (!selectedProject || selectedProject.rol !== "lector")} sources={orderedSources} openLibrarySignal={openLibrarySignal} onSourcesChanged={async () => { const page = await listChatSources(session.chat.id); setSources(page.sources); setSourcesCursor(page.nextCursor); await refreshChat(); }} /> : null}
+            sourceTools={session && !isMockMode ? <FluSourceTools chatId={session.chat.id} projectId={session.chat.projectId} unassigned={session.chat.unassigned} canWrite={canWrite && (!selectedProject || selectedProject.rol !== "lector")} openLibrarySignal={openLibrarySignal} onSourcesChanged={async () => { const page = await listChatSources(session.chat.id); setSources(page.sources); setSourcesCursor(page.nextCursor); await refreshChat(); }} /> : null}
             deliverables={visibleDeliverables}
             onOpenDeliverable={openDeliverable}
             busy={busy}

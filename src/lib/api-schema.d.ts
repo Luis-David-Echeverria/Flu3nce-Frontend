@@ -108,6 +108,13 @@ export interface paths {
          *     - Si una sesión se usa desde una IP distinta a la de su login, el
          *       servidor lo deja escrito en su log (solo aviso; la sesión no se
          *       corta y la respuesta no cambia).
+         *     - Corte 35 (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+         *       Salvador lo acepte, de despliegue y habilitado por cuenta): caducidad
+         *       DESLIZANTE. La sesión vence 1 h después de la ÚLTIMA petición
+         *       autenticada, con un tope de 12 h desde el login, para que una
+         *       conversación o un trabajo largo no terminen en la pantalla de inicio de
+         *       sesión. Sin ruta nueva ni cambio de forma. Hasta que se despliegue vale
+         *       la regla de arriba (1 h exacta desde el login).
          */
         post: {
             parameters: {
@@ -566,6 +573,14 @@ export interface paths {
          *     servidor no la habilite para nadie, ese `404` llega antes de mirar la sesión
          *     (también sin sesión). El front entonces arma la barra como hoy, con
          *     `GET /chats`.
+         *
+         *     **Buscar** (corte 35, propuesto por David el 6-nov-2026; aditivo; pendiente
+         *     de que Salvador lo acepte, de despliegue y habilitado por cuenta con
+         *     `chat_search`): con `q`, solo los chats cuyo título o mensajes contienen el
+         *     texto (sin distinguir mayúsculas ni acentos), en el mismo orden y con la
+         *     misma paginación. Cada chat que coincide por sus mensajes lleva `matches`
+         *     (hasta 3: el mensaje y un fragmento) para abrirlo en ese mensaje. Solo busca
+         *     en lo que el usuario ya puede ver. Sin la capacidad, `q` se ignora.
          */
         get: {
             parameters: {
@@ -574,6 +589,14 @@ export interface paths {
                     limit?: components["parameters"]["Limit"];
                     /** @description Puntero a la página siguiente (el `nextCursor` de la respuesta anterior). */
                     cursor?: components["parameters"]["Cursor"];
+                    /**
+                     * @description Corte 35 (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+                     *     Salvador lo acepte, de despliegue y habilitado por cuenta con `chat_search`).
+                     *     Texto a buscar en el título y los mensajes de los chats, sin distinguir
+                     *     mayúsculas ni acentos. De 2 a 200 caracteres (fuera de rango,
+                     *     `400 validation_failed`). Sin la capacidad, se ignora.
+                     */
+                    q?: components["parameters"]["ChatSearchQuery"];
                 };
                 header?: never;
                 path?: never;
@@ -639,6 +662,68 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/events-stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Avisos del usuario que no dependen de tener abierto un chat (SSE, reanudable). Corte 35, propuesto.
+         * @description **Corte 35** (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+         *     Salvador lo acepte, de despliegue y habilitado por cuenta con `user_events`).
+         *     Sin habilitar, `404 not_found` antes de mirar la sesión, como cualquier
+         *     función apagada.
+         *
+         *     Para avisar al usuario cuando termina algo mientras está en otro chat o en
+         *     otra pantalla: la marca de «respuesta nueva» de la barra lateral y, si el
+         *     usuario lo permitió, una notificación del navegador. No sustituye a
+         *     `GET /chats/{chatId}/events-stream`, que sigue siendo la fuente del detalle
+         *     del chat abierto.
+         *
+         *     - `job.finished`: terminó un trabajo que lanzó el usuario (`done`, `failed` o
+         *       `cancelled`), con su chat y los entregables que dejó.
+         *     - `reply.ready`: hay una respuesta nueva de Flu en un chat del usuario
+         *       (también la explicación final de una cadena del núcleo).
+         *
+         *     Cada evento lleva `id:` SSE. **Reanudar:** con `Last-Event-ID` sigue justo
+         *     después; sin él, empieza desde ahora. Latido `: latido` cada 15 s sin
+         *     eventos. El servidor puede cerrar a los 10 minutos; el cliente se reconecta
+         *     con `Last-Event-ID`. Solo llegan avisos de lo que el usuario puede ver.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: {
+                    "Last-Event-ID"?: string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Eventos SSE. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/event-stream": string;
+                    };
+                };
+                401: components["responses"]["Error"];
+                404: components["responses"]["Error"];
             };
         };
         put?: never;
@@ -2602,7 +2687,60 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Archiva o desarchiva el entregable (deshacer uno nuevo). Corte 35, propuesto.
+         * @description **Corte 35** (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+         *     Salvador lo acepte, de despliegue y habilitado por cuenta con `auto_execute`).
+         *
+         *     Es el «deshacer» de un entregable que Flu acaba de crear sin pedir
+         *     confirmación: lo saca de las listas y de lo que Flu ve como material, sin
+         *     borrar nada. Sus versiones y su historial se conservan y se puede
+         *     desarchivar. Para deshacer un CAMBIO sobre un entregable que ya existía no se
+         *     archiva: se restaura la versión anterior
+         *     (`POST …/versions/{versionId}/restore`).
+         *
+         *     - `archived: true` pone `archivedAt`; `false` lo quita. Repetir el mismo valor
+         *       no cambia nada (`200` con el entregable igual).
+         *     - Mientras se está generando, `409 deliverable_busy`.
+         *     - Solo quien puede escribir en el proyecto (o el autor del chat de origen):
+         *       los demás reciben `403`.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    projectId: components["parameters"]["ProjectId"];
+                    deliverableId: components["parameters"]["DeliverableId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    /**
+                     * @example {
+                     *       "archived": true
+                     *     }
+                     */
+                    "application/json": components["schemas"]["UpdateDeliverableRequest"];
+                };
+            };
+            responses: {
+                /** @description El entregable, con `archivedAt` si quedó archivado. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Deliverable"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                403: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+                409: components["responses"]["Error"];
+            };
+        };
         trace?: never;
     };
     "/projects/{projectId}/deliverables/{deliverableId}/content": {
@@ -2622,7 +2760,7 @@ export interface paths {
          *
          *     | type | canónico (sin `format`) | se puede pedir con `?format=` | editable por PUT |
          *     |---|---|---|---|
-         *     | `diagram_as_is` | **json** | json | sí |
+         *     | `diagram_as_is` | **json** | json (corte 34: bpmn y png, abajo) | sí |
          *     | `transcription` | **json** | json, docx | sí |
          *     | `diagnostic` | **docx** | docx, pdf, json | no |
          *     | `understanding` | **docx** | docx, json | no |
@@ -2634,6 +2772,17 @@ export interface paths {
          *     `policy_draft`: el canónico es **docx** (el backend sirve el .docx sin
          *     `format` desde siempre); su JSON (`PolicyDraftContent`) se pide con
          *     `?format=json`.
+         *
+         *     **`diagram_as_is` en bpmn y png (corte 34; aditivo, habilitado por cuenta,
+         *     pendiente de despliegue).** Una versión de un diagrama publicada por el núcleo
+         *     lleva dos representaciones de la MISMA versión: `bpmn` (BPMN 2.0 XML,
+         *     `application/bpmn+xml`, el archivo editable) y `png` (`image/png`, una imagen
+         *     exportada de ese BPMN). Se piden con `?format=bpmn` y `?format=png`, para quien
+         *     tenga el diagrama editable habilitado, sin depender del entregable genérico.
+         *     Una versión que no las tiene responde `404 representation_not_available`, como
+         *     cualquier representación (nunca se convierte al vuelo). Para los demás,
+         *     `?format=bpmn` responde `400 validation_failed`, como hoy un formato fuera del
+         *     enum. `json` sigue siendo el canónico.
          *
          *     **`presentation` en pptx o png.** El archivo de la versión sale en el formato
          *     con el que se generó (`exportAs`: pdf por defecto, pptx o png). Se descarga
@@ -2727,7 +2876,7 @@ export interface paths {
                      *     DOCX, PPTX y XLSX llega en un corte posterior y, hasta entonces, su
                      *     `representation_not_available` sale como hoy, sin `state`.
                      */
-                    format?: "json" | "docx" | "pdf" | "pptx" | "xlsx" | "png" | "csv" | "txt" | "md";
+                    format?: "json" | "docx" | "pdf" | "pptx" | "xlsx" | "png" | "csv" | "txt" | "md" | "bpmn";
                 };
                 header?: never;
                 path: {
@@ -2757,6 +2906,7 @@ export interface paths {
                         "image/png": string;
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                         "text/markdown": string;
+                        "application/bpmn+xml": string;
                         "application/json": components["schemas"]["ContractA"] | components["schemas"]["TranscriptionContent"] | components["schemas"]["DiagnosticContent"] | components["schemas"]["UnderstandingContent"] | components["schemas"]["PolicyAnalysisContent"] | components["schemas"]["PolicyDraftContent"];
                     };
                 };
@@ -3143,7 +3293,7 @@ export interface paths {
                      *     `400 validation_failed`. La representación PDF de cada versión (corte 28) y
                      *     `document`, como en `…/content`.
                      */
-                    format?: "json" | "docx" | "pdf" | "pptx" | "xlsx" | "png" | "csv" | "txt" | "md";
+                    format?: "json" | "docx" | "pdf" | "pptx" | "xlsx" | "png" | "csv" | "txt" | "md" | "bpmn";
                 };
                 header?: never;
                 path: {
@@ -3175,6 +3325,7 @@ export interface paths {
                         "image/png": string;
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                         "text/markdown": string;
+                        "application/bpmn+xml": string;
                         "application/json": components["schemas"]["ContractA"] | components["schemas"]["TranscriptionContent"] | components["schemas"]["DiagnosticContent"] | components["schemas"]["UnderstandingContent"] | components["schemas"]["PolicyAnalysisContent"] | components["schemas"]["PolicyDraftContent"];
                     };
                 };
@@ -3308,6 +3459,76 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/deliverables/{deliverableId}/versions/{versionId}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                deliverableId: components["parameters"]["DeliverableId"];
+                versionId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Qué cambió entre dos versiones del entregable. Corte 35, propuesto.
+         * @description **Corte 35** (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+         *     Salvador lo acepte, de despliegue y habilitado por cuenta con `revisions`).
+         *
+         *     Para la vista «qué cambió» después de mejorar un entregable conversando.
+         *     Compara `versionId` con `against`; sin `against`, con su `baseVersionId` y, si
+         *     no tiene, con la versión anterior por número.
+         *
+         *     - Texto (`understanding`, `diagnostic`, `policy_analysis`, `policy_draft`,
+         *       `document`): `kind: sections`, por secciones (su ruta de títulos).
+         *     - Diagrama (`diagram_as_is`): `kind: diagram_elements`, por elementos
+         *       (tareas, decisiones, carriles y conexiones) con su id estable.
+         *     - Tablas (`xlsx` de un `generic`): `kind: rows`.
+         *
+         *     Determinista y sin llamar al modelo. `404 deliverable_not_found` o
+         *     `404 version_not_found` como en las demás rutas del entregable.
+         *     `409 diff_not_available`: alguna de las dos versiones no tiene contenido
+         *     estructurado guardado (`origin: unrecoverable`, una subida sin extraer o un
+         *     tipo sin comparación todavía).
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description El `id` de la versión con la que se compara. Del mismo entregable. */
+                    against?: string;
+                };
+                header?: never;
+                path: {
+                    projectId: components["parameters"]["ProjectId"];
+                    deliverableId: components["parameters"]["DeliverableId"];
+                    versionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["VersionDiff"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+                409: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4346,6 +4567,10 @@ export interface paths {
          *     (`detail.fields`, `loc: [query, projectId]`). Un `projectId` que el usuario no
          *     ve: `404 project_not_found`. Orden: `updatedAt` descendente, desempate por
          *     `id`; paginación cursor como las demás listas.
+         *
+         *     **Buscar** (corte 35, propuesto; ver `GET /me/chats`): con `q`, solo los chats
+         *     del filtro cuyo título o mensajes contienen el texto, con `matches` en los
+         *     que coinciden por sus mensajes. Sin la capacidad `chat_search`, `q` se ignora.
          */
         get: {
             parameters: {
@@ -4356,6 +4581,14 @@ export interface paths {
                     limit?: components["parameters"]["Limit"];
                     /** @description Puntero a la página siguiente (el `nextCursor` de la respuesta anterior). */
                     cursor?: components["parameters"]["Cursor"];
+                    /**
+                     * @description Corte 35 (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+                     *     Salvador lo acepte, de despliegue y habilitado por cuenta con `chat_search`).
+                     *     Texto a buscar en el título y los mensajes de los chats, sin distinguir
+                     *     mayúsculas ni acentos. De 2 a 200 caracteres (fuera de rango,
+                     *     `400 validation_failed`). Sin la capacidad, se ignora.
+                     */
+                    q?: components["parameters"]["ChatSearchQuery"];
                 };
                 header?: never;
                 path?: never;
@@ -4660,6 +4893,46 @@ export interface paths {
          *     esté habilitado para la cuenta, `attachmentIds` se acepta y se ignora (el
          *     mensaje sale sin `refs.sourceIds`). Ver `POST /chats/{chatId}/messages-with-files`
          *     para subir y enviar en una sola petición.
+         *
+         *     **Corte 35: experiencia conversacional** (propuesto por David el 6-nov-2026;
+         *     aditivo; pendiente de que Salvador lo acepte, de despliegue y habilitado por
+         *     cuenta; ver `docs/capacidades/experiencia-conversacional.md`). Lo de arriba
+         *     sigue valiendo hasta que se despliegue. Con la capacidad correspondiente en
+         *     `User.capabilities`:
+         *
+         *     - `auto_execute`: el mensaje EJECUTA lo que el usuario pide dentro del
+         *       alcance autorizado de la cuenta, en el mismo turno (`outcome: launched`, con
+         *       `reply.refs.jobIds`). Solo propone (`outcome: proposed`, una intención
+         *       `pending`) en los casos de `GenerationIntent.reason`: coste o proveedor
+         *       externo fuera de lo autorizado, sustituir una versión editada a mano,
+         *       efectos hacia otras personas, el permiso de un proveedor o borrar algo que
+         *       no se recupera. Un mensaje responde la pregunta que Flu acaba de hacer,
+         *       también con «sí»; una intención con `reason` solo se confirma con
+         *       `POST /chats/{chatId}/intents/{intentId}/confirm`. Una revisión
+         *       (`revise_deliverable`) también se ejecuta como trabajo lanzado, con
+         *       `targeted_change` por defecto; `full_regeneration` solo si el texto de Flu
+         *       lo anuncia antes, con su motivo. Guardar un dato de contexto se hace y se
+         *       dice («Lo guardé en el contexto del proyecto»). Lo que Flu lanza sin pedir
+         *       confirmación se deshace restaurando la versión anterior o archivando el
+         *       entregable nuevo (`PATCH /projects/{projectId}/deliverables/{deliverableId}`).
+         *     - Una sola ronda de preguntas por solicitud antes de producir algo (una
+         *       `OrchestratorQuestion`, corte 34). Si sigue faltando algo, Flu produce con
+         *       supuestos y los dice en `ConsultationMessage.assumptions`.
+         *     - `concurrent_messages`: se acepta un mensaje nuevo aunque haya trabajos
+         *       activos en el chat; no espera a que terminen ni los cancela. Mientras la
+         *       parte conversacional de un turno sigue abierta (antes de su `done`), un
+         *       mensaje nuevo da `409 turn_in_progress` con `detail.turnId`, para que el
+         *       front ofrezca detenerlo (`POST /chats/{chatId}/turns/{turnId}/cancel`). Dos
+         *       escrituras sobre el mismo entregable se encolan en orden: la segunda parte
+         *       de la versión que dejó la primera (un `deliverable_busy` ya no falla: espera).
+         *     - `edit_message`: `replacesMessageId` reemplaza el ÚLTIMO mensaje del usuario
+         *       (ver `ChatMessageRequest`); `409 not_last_message` si no lo es.
+         *     - `fragment_edit`: `target` dice a qué fragmento se refiere el mensaje (ver
+         *       `MessageTarget`); `409 anchor_stale` si el fragmento ya no existe en la
+         *       versión vigente.
+         *     - `follow_ups`: la respuesta puede traer `followUps`, siguientes pasos posibles
+         *       con el catálogo efectivo de la cuenta. El front los escribe en el
+         *       compositor; nunca se ejecutan solos.
          */
         post: {
             parameters: {
@@ -4694,10 +4967,267 @@ export interface paths {
                 400: components["responses"]["Error"];
                 403: components["responses"]["ChatForbidden"];
                 404: components["responses"]["Error"];
+                /**
+                 * @description Los `409` de siempre (ver la descripción). Corte 35 (propuesto) añade:
+                 *     `turn_in_progress` (la parte conversacional del turno anterior sigue
+                 *     abierta; `detail.turnId`), `not_last_message` (`replacesMessageId` no es el
+                 *     último mensaje del usuario) y `anchor_stale` (el `target` ya no existe en
+                 *     la versión vigente; `detail.currentVersionId`).
+                 */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{chatId}/messages/{messageId}/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chatId: components["parameters"]["ChatId"];
+                /** @description Corte 35 (propuesto). El `id` de un mensaje del chat (`m_N`). */
+                messageId: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vuelve a generar la última respuesta de Flu, como una alternativa. Corte 35, propuesto.
+         * @description **Corte 35** (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+         *     Salvador lo acepte, de despliegue y habilitado por cuenta con `regenerate`).
+         *
+         *     Repite el turno de la ÚLTIMA respuesta de Flu del chat (`messageId`) con el
+         *     mismo contexto, sin duplicar el mensaje del usuario. La respuesta nueva queda
+         *     como alternativa de la anterior (`alternativeOf`, `alternativeIndex`,
+         *     `alternativeCount`); la anterior se conserva y se lee con
+         *     `GET /chats/{chatId}/messages/{messageId}/alternatives`.
+         *
+         *     - Si el turno publicó entregables, regenerar publica VERSIONES NUEVAS de esos
+         *       mismos entregables; nunca entregables paralelos ni borra los anteriores.
+         *     - `model` (opcional) regenera con otro modelo, con las reglas de
+         *       `ChatMessageRequest.model`.
+         *     - `clientMessageId` hace idempotente la petición, como en
+         *       `POST /chats/{chatId}/messages`.
+         *     - Solo la última respuesta: otra, `409 not_last_message`. Con un turno abierto
+         *       en el chat, `409 turn_in_progress`.
+         *     - Solo el autor del chat (`403` para los demás).
+         *
+         *     Devuelve lo mismo que `POST /chats/{chatId}/messages` (`201`,
+         *     `ConsultationExchange`, con el mismo `userMessage`). Con
+         *     `Accept: text/event-stream` y el stream habilitado para la cuenta, responde
+         *     `200` con los mismos eventos que `POST /chats/{chatId}/messages-stream`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    chatId: components["parameters"]["ChatId"];
+                    /** @description Corte 35 (propuesto). El `id` de un mensaje del chat (`m_N`). */
+                    messageId: components["parameters"]["MessageId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    /**
+                     * @example {
+                     *       "clientMessageId": "r-2b81f0"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RegenerateRequest"];
+                };
+            };
+            responses: {
+                /** @description Con `Accept: text/event-stream`, el stream del turno (ver `POST /chats/{chatId}/messages-stream`). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/event-stream": string;
+                    };
+                };
+                /** @description El mensaje del usuario (el mismo) y la respuesta nueva de Flu. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConsultationExchange"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                401: components["responses"]["Error"];
+                403: components["responses"]["ChatForbidden"];
+                404: components["responses"]["Error"];
                 409: components["responses"]["Error"];
             };
         };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{chatId}/messages/{messageId}/alternatives": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chatId: components["parameters"]["ChatId"];
+                /** @description Corte 35 (propuesto). El `id` de un mensaje del chat (`m_N`). */
+                messageId: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Las versiones de una respuesta de Flu (‹ 1/2 ›). Corte 35, propuesto.
+         * @description **Corte 35** (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+         *     Salvador lo acepte, de despliegue y habilitado por cuenta con `regenerate`
+         *     o `edit_message`).
+         *
+         *     Todas las alternativas de la respuesta `messageId` (la original y las
+         *     regeneradas, o las respuestas a un mensaje que se editó), en orden de
+         *     `alternativeIndex`. `GET /chats/{chatId}` devuelve solo la vigente: la última
+         *     generada. Lo pueden leer todos los que ven el chat.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    chatId: components["parameters"]["ChatId"];
+                    /** @description Corte 35 (propuesto). El `id` de un mensaje del chat (`m_N`). */
+                    messageId: components["parameters"]["MessageId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MessageAlternatives"];
+                    };
+                };
+                401: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{chatId}/messages/{messageId}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chatId: components["parameters"]["ChatId"];
+                /** @description Corte 35 (propuesto). El `id` de un mensaje del chat (`m_N`). */
+                messageId: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Valora una respuesta de Flu (👍 o 👎, con motivo opcional). Corte 35, propuesto.
+         * @description **Corte 35** (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+         *     Salvador lo acepte, de despliegue y habilitado por cuenta con `feedback`).
+         *
+         *     Guarda (o reemplaza) la valoración del autor del chat sobre un mensaje de
+         *     Flu. El servidor la guarda con el `turnId` y la traza interna del turno
+         *     (modelo, herramientas, versiones usadas) para revisarla sin reconstruir el
+         *     caso. No cambia la respuesta ni el chat. Un mensaje que no es de Flu:
+         *     `400 validation_failed`. Solo el autor (`403` para los demás).
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    chatId: components["parameters"]["ChatId"];
+                    /** @description Corte 35 (propuesto). El `id` de un mensaje del chat (`m_N`). */
+                    messageId: components["parameters"]["MessageId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    /**
+                     * @example {
+                     *       "rating": "down",
+                     *       "reason": "ignored_source",
+                     *       "comment": "No usó el PDF que adjunté."
+                     *     }
+                     */
+                    "application/json": components["schemas"]["MessageFeedback"];
+                };
+            };
+            responses: {
+                /** @description Guardada. */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["Error"];
+                401: components["responses"]["Error"];
+                403: components["responses"]["ChatForbidden"];
+                404: components["responses"]["Error"];
+            };
+        };
+        post?: never;
+        /**
+         * Retira la valoración de una respuesta. Corte 35, propuesto.
+         * @description **Corte 35** (propuesto). Retira la valoración del autor. Sin valoración, `204` igual.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    chatId: components["parameters"]["ChatId"];
+                    /** @description Corte 35 (propuesto). El `id` de un mensaje del chat (`m_N`). */
+                    messageId: components["parameters"]["MessageId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Retirada. */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                401: components["responses"]["Error"];
+                403: components["responses"]["ChatForbidden"];
+                404: components["responses"]["Error"];
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -6047,6 +6577,12 @@ export interface paths {
          *     turno**: lo que queda en el chat es idéntico. `POST /chats/{chatId}/messages`
          *     no cambia.
          *
+         *     Corte 35 (corrección, propuesta por David el 6-nov-2026; pendiente de que
+         *     Salvador la acepte): el esquema del cuerpo pasa a ser `ChatMessageRequest`, el
+         *     de `POST /chats/{chatId}/messages`, como dice el párrafo anterior. Antes se
+         *     declaraba `ConsultationMessageRequest`, que no tiene `model` ni
+         *     `attachmentIds`. Es una ampliación: todo cuerpo válido antes lo sigue siendo.
+         *
          *     **Qué se transmite.** Cada respuesta de Flu pasa por los validadores del
          *     servidor y puede rechazarse y reintentarse antes de publicarse, así que lo que
          *     va escribiendo el modelo NO se transmite:
@@ -6122,6 +6658,31 @@ export interface paths {
          *     `done` y `error` no cambian (no llevan `turnId`). Las tarjetas de los entregables
          *     que terminan DESPUÉS del `done` llegan por `GET /chats/{chatId}/events-stream`.
          *
+         *     **Corte 35: texto en vivo** (propuesto por David el 6-nov-2026; aditivo;
+         *     pendiente de que Salvador lo acepte, de despliegue y habilitado por cuenta con
+         *     `stream_text` en `User.capabilities`). Con la fase B y `stream_text`, el texto
+         *     conversacional de una parte `text` sale MIENTRAS el modelo lo escribe:
+         *     1. `part.start` y después `text.delta` (`partId`, `seq`, `delta`), uno por
+         *        fragmento que entrega el proveedor, sin esperar al validador. Concatenados
+         *        en orden de `seq`, los `delta` de una parte dan lo que lleva mostrado;
+         *     2. lo que exige validación antes de mostrarse (tablas, cifras con fuente,
+         *        tarjetas, citas, preguntas) sigue saliendo como su parte o su `text.block`
+         *        cuando pasa la validación;
+         *     3. si una revisión rechaza algo ya mostrado (una cita que no existe, una cifra
+         *        sin fuente) o el turno se reintenta, llega `part.replace` (`partId`,
+         *        `markdown`, `reason`) con el texto COMPLETO y corregido de esa parte: el
+         *        front la reemplaza y puede decir por qué. Es la única excepción a «lo
+         *        enviado nunca se reescribe», y siempre se ve;
+         *     4. `message.reply.text` sigue siendo la fuente de verdad: es el texto final,
+         *        igual a lo que queda tras aplicar los `text.delta` y los `part.replace`.
+         *     **Reconectar** mientras el turno sigue (repetir el envío con el mismo
+         *     `clientMessageId` y `Last-Event-ID`): la parte abierta llega como UN
+         *     `text.block` con todo lo acumulado y después siguen los `text.delta` desde el
+         *     `seq` siguiente, sin duplicar ni perder texto. Sin `stream_text` no cambia
+         *     nada: no sale ningún `text.delta` ni `part.replace`. Un mensaje nuevo con
+         *     trabajos activos y el `409 turn_in_progress`: como en
+         *     `POST /chats/{chatId}/messages` (corte 35).
+         *
          *     **Errores antes del stream** (con su status HTTP y el cuerpo `Error`), en este
          *     orden:
          *     1. `404 not_found`: el stream no está habilitado para nadie (hoy). Antes de
@@ -6155,7 +6716,7 @@ export interface paths {
                      *       "clientMessageId": "c-5d2e10"
                      *     }
                      */
-                    "application/json": components["schemas"]["ConsultationMessageRequest"];
+                    "application/json": components["schemas"]["ChatMessageRequest"];
                 };
             };
             responses: {
@@ -6774,6 +7335,10 @@ export interface paths {
          *       `/revisar` preparan una propuesta pendiente (un mensaje nuevo: deja sin
          *       efecto las anteriores, ver `GenerationIntent.state`) y `/cancelar` descarta
          *       las pendientes del chat. Ninguno confirma nada.
+         *       Corte 35 (propuesto; con `auto_execute`): `/crear` y `/revisar` ejecutan
+         *       como cualquier petición explícita del chat, y `/recordar` guarda el dato y
+         *       lo dice; las propuestas solo quedan para los casos de
+         *       `GenerationIntent.reason`.
          *     - `/unidades` ya no se lista (las unidades son internas en el chat): escrito,
          *       el chat lo entiende como `/entregables`, pero no sale en el catálogo ni en
          *       `/ayuda`.
@@ -7224,6 +7789,15 @@ export interface components {
              *     por sí sola. ENUM ABIERTO: una desconocida se ignora. Sin repetidos;
              *     ausente si la cuenta no tiene ninguna y antes del despliegue (nunca
              *     vacío ni `null`).
+             *
+             *     Corte 35 (propuesto por David el 6-nov-2026; pendiente de que Salvador
+             *     lo acepte y de despliegue): nombres nuevos, uno por capacidad de la
+             *     experiencia conversacional (`docs/capacidades/experiencia-conversacional.md`):
+             *     `stream_text` (texto en vivo), `auto_execute` (ejecutar lo pedido sin
+             *     propuesta), `citations` (citas con ubicación, con el corte 24),
+             *     `fragment_edit` (señalar un fragmento), `regenerate`, `edit_message`,
+             *     `concurrent_messages` (escribir mientras hay trabajos), `follow_ups`,
+             *     `project_instructions`, `feedback`, `chat_search` y `user_events`.
              */
             capabilities?: string[];
         };
@@ -7326,6 +7900,14 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt?: string;
+            /**
+             * @description Corte 35 (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+             *     Salvador lo acepte, de despliegue y habilitado por cuenta con
+             *     `project_instructions`). Las instrucciones que todos los chats del
+             *     proyecto respetan («Somos bimcon; usa el formato de políticas de la
+             *     empresa; responde en tono formal»). Ausente si no hay; nunca `null`.
+             */
+            instructions?: components["schemas"]["ProjectInstructions"];
         };
         CreateProjectRequest: {
             name: string;
@@ -7336,6 +7918,13 @@ export interface components {
             description?: string;
             /** @enum {string} */
             status?: "active" | "closed";
+            /**
+             * @description Corte 35 (propuesto; `project_instructions`). Reemplaza las instrucciones
+             *     del proyecto (`Project.instructions`) y sube su `version`. Vacío las quita.
+             *     Solo el `owner`: un `editor` recibe `403`. Sin la capacidad,
+             *     `400 validation_failed`.
+             */
+            instructions?: string;
         };
         /**
          * @example {
@@ -7884,6 +8473,15 @@ export interface components {
             operation?: string;
             /** @description Solo `generic`. El formato pedido al producirlo; igual a `format`. */
             exportAs?: string;
+            /**
+             * Format: date-time
+             * @description Corte 35 (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+             *     Salvador lo acepte, de despliegue y habilitado por cuenta). Cuándo se
+             *     archivó (`PATCH …/deliverables/{deliverableId}` con `archived: true`): no
+             *     sale en las listas ni Flu lo usa como material, pero se conserva con sus
+             *     versiones. Ausente si no está archivado; nunca `null`.
+             */
+            archivedAt?: string;
         };
         /**
          * @description Una entrada del linaje de una versión (corte 16, entregable genérico; se despliega
@@ -7938,6 +8536,28 @@ export interface components {
              * @enum {string}
              */
             origin?: "real" | "derived" | "unrecoverable";
+            /**
+             * @description Corte 35 (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+             *     Salvador lo acepte, de despliegue y habilitado por cuenta). Solo en
+             *     versiones de ENTREGABLES hechas a partir de otra (una revisión, o una
+             *     regeneración pedida sobre una versión): el `id` de esa versión base. Es
+             *     con la que compara `GET …/versions/{versionId}/diff` por defecto.
+             *     Ausente en las demás; nunca `null`.
+             */
+            baseVersionId?: string;
+            /**
+             * @description Corte 35. Con `baseVersionId`: qué cambió, en una o dos frases y en
+             *     palabras del usuario («Agregué la sección de riesgos y pasé la
+             *     introducción a un tono formal.»). Es lo que Flu dice en el chat al
+             *     publicarla. Ausente si no se sabe; nunca inventado.
+             */
+            changeSummary?: string;
+            /**
+             * @description Corte 35. Con `baseVersionId` y un cambio puntual: las partes que de verdad
+             *     cambiaron (la misma forma que `RevisionOutcome.changedParts`). Ausente si
+             *     cambió el entregable entero.
+             */
+            changedParts?: string[];
         };
         /**
          * @example {
@@ -10533,10 +11153,12 @@ export interface components {
              * @description Los formatos que SÍ existen para esta versión y se descargan con
              *     `GET …/versions/{versionId}/content?format=…` (los de la tabla de `…/content`
              *     que se generaron para ella). Es la extensión del archivo de la versión más
-             *     sus representaciones guardadas. `pptx` y `png` (solo `presentation`) no se
+             *     sus representaciones guardadas. `pptx` y `png` de una `presentation` no se
              *     piden con `format`: son el archivo de la versión y se descargan sin `format`.
+             *     Corte 34: en un `diagram_as_is` publicado por el núcleo, `bpmn` y `png` son
+             *     representaciones de la versión y se piden con `?format=bpmn` y `?format=png`.
              */
-            formats: ("json" | "docx" | "pdf" | "pptx" | "png" | "md")[];
+            formats: ("json" | "docx" | "pdf" | "pptx" | "png" | "md" | "bpmn")[];
             /** @description `true` si viene `content`. `false`: la versión no tiene contenido estructurado; ver `unavailableReason`. */
             contentAvailable: boolean;
             /**
@@ -10824,6 +11446,7 @@ export interface components {
          *         technical_failure  failure
          *         intent_to_confirm  intent
          *         clarification      clarification
+         *         orchestrator_question  orchestratorQuestion   (corte 34)
          *
          *     `text` va SIEMPRE: es lo mínimo que el front puede pintar, aunque no conozca el
          *     `kind` (un `kind` nuevo no es un cambio de contrato y un cliente debe tolerarlo).
@@ -10850,8 +11473,17 @@ export interface components {
             /** @enum {string} */
             role: "user" | "flu" | "system";
             /** @enum {string} */
-            kind: "text" | "generation_status" | "question_group" | "answers" | "deliverable_card" | "technical_failure" | "intent_to_confirm" | "clarification";
+            kind: "text" | "generation_status" | "question_group" | "answers" | "deliverable_card" | "technical_failure" | "intent_to_confirm" | "clarification" | "orchestrator_question";
             text: string;
+            /**
+             * @description Corte 34 (aditivo; habilitado por cuenta, pendiente de despliegue). Solo con
+             *     `kind: orchestrator_question`: la pregunta TIPADA que el núcleo del agente
+             *     decidió hacer (`NeedsUserInput` del orquestador). `text` lleva lo dicho en el
+             *     turno con la pregunta al final, para el front que no conozca este `kind`.
+             *     Se guarda con el mensaje: `GET /chats/{chatId}` la devuelve igual, con su
+             *     `state` al día. Ausente en cualquier otro mensaje; nunca `null`.
+             */
+            orchestratorQuestion?: components["schemas"]["OrchestratorQuestion"];
             refs?: components["schemas"]["MessageRefs"];
             generationStatus?: components["schemas"]["GenerationStatus"];
             questionGroup?: components["schemas"]["QuestionGroup"];
@@ -10953,10 +11585,51 @@ export interface components {
              *     `gpt-5.4-2026-03-05`). Ausente cuando no aplica; nunca `null`.
              */
             modelUsedVersion?: string;
+            /**
+             * @description Corte 35 (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+             *     Salvador lo acepte, de despliegue y habilitado por cuenta). Solo en
+             *     mensajes de Flu: los supuestos con los que siguió sin preguntar más (una
+             *     sola ronda de preguntas por solicitud) o porque el usuario contestó
+             *     «decide tú» (`OrchestratorQuestion.decideForMe`). También van en `text`; aquí
+             *     sirven para pintarlos aparte y corregirlos. Ausente si no hubo supuestos;
+             *     nunca vacío ni `null`.
+             */
+            assumptions?: components["schemas"]["MessageAssumption"][];
+            /**
+             * @description Corte 35 (propuesto; `follow_ups`). Solo en mensajes de Flu: hasta tres
+             *     siguientes pasos posibles («Hacer el diagrama», «Exportar a PDF»), solo con
+             *     acciones del catálogo efectivo de la cuenta. El front escribe `prompt` en el
+             *     compositor; NUNCA se ejecutan solos. Ausente si no hay; nunca vacío.
+             */
+            followUps?: components["schemas"]["MessageFollowUp"][];
+            /**
+             * @description Corte 35 (propuesto; `regenerate`, `edit_message`). Solo en una respuesta
+             *     de Flu que tiene alternativas: el `id` de la PRIMERA respuesta del grupo
+             *     (la original). Ausente en un mensaje sin alternativas.
+             */
+            alternativeOf?: string;
+            /** @description Corte 35. Con `alternativeOf`: cuál es esta (1 = la original). */
+            alternativeIndex?: number;
+            /** @description Corte 35. Con `alternativeOf`: cuántas hay en el grupo. `GET /chats/{chatId}` devuelve la vigente (la última). */
+            alternativeCount?: number;
+            /**
+             * @description Corte 35 (propuesto; `edit_message`). Solo en un mensaje del usuario que
+             *     reemplazó al último (`ChatMessageRequest.replacesMessageId`): el `id` del
+             *     mensaje reemplazado, que sigue en el historial como alternativa.
+             */
+            replacedMessageId?: string;
         };
         /** @description Referencias opcionales del mensaje a lo que existe en la API. */
         MessageRefs: {
             jobId?: string;
+            /**
+             * @description Corte 35 (corrección, propuesta por David el 6-nov-2026; pendiente de que
+             *     Salvador la acepte). Los trabajos que puso en marcha el turno sin pedir
+             *     confirmación. Es el campo al que remite `outcome: launched` («ver
+             *     `reply.refs.jobIds`», corte 32), que este esquema no declaraba. Ausente si
+             *     no se lanzó ninguno; nunca vacío.
+             */
+            jobIds?: string[];
             deliverableIds?: string[];
             versions?: components["schemas"]["VersionRef"][];
             sourceIds?: string[];
@@ -11073,6 +11746,12 @@ export interface components {
             error?: components["schemas"]["JobError"];
             /** @description Ruta del detalle en esta API: /projects/{projectId}/deliverables/{deliverableId}. */
             detailPath?: string;
+            /** @description Corte 34 (aditivo; habilitado por cuenta, pendiente de despliegue). Solo en la tarjeta de un entregable que publicó una solicitud del núcleo: la solicitud (`ConsultationExchange.nucleo.requestId`). Ausente en cualquier otra. */
+            requestId?: string;
+            /** @description Corte 34. Con `requestId`: los objetivos de la solicitud a los que sirve este entregable. Lo que el núcleo necesita por dentro (un análisis o una estructura intermedia) no es un entregable aparte y no sale como tarjeta. */
+            objectiveIds?: string[];
+            /** @description Corte 34. Con `requestId`, solo `true`: el entregable sirve solo a objetivos que el usuario NO pidió (lo sugirió Flu y se lanzó con su botón). El front lo marca como «no solicitado». Ausente = pedido; nunca `false`. */
+            notRequested?: boolean;
             /**
              * @description El título del entregable, el mismo que `Deliverable.title`, para que el chat lo
              *     muestre en la tarjeta sin otra consulta. Opcional.
@@ -11179,6 +11858,25 @@ export interface components {
             /** @description Por qué la propone. */
             rationale?: string;
             /**
+             * @description Corte 35 (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+             *     Salvador lo acepte, de despliegue y habilitado por cuenta con
+             *     `auto_execute`). Por qué esta acción SÍ pide confirmación. Con
+             *     `auto_execute`, una petición explícita se ejecuta sin propuesta y solo
+             *     queda una intención `pending` en estos casos:
+             *
+             *     - `external_cost`: coste o proveedor externo fuera de lo autorizado para
+             *       la cuenta;
+             *     - `manual_version_conflict`: sustituiría una versión editada a mano;
+             *     - `affects_others`: efectos hacia otras personas (compartir, invitar);
+             *     - `provider_permission`: enviaría a un proveedor un archivo sin permiso
+             *       para él (se pide el permiso, no la tarea);
+             *     - `irreversible_delete`: borraría algo que no se recupera.
+             *
+             *     ENUM ABIERTO. Ausente en las intenciones anteriores al corte y sin
+             *     `auto_execute`.
+             */
+            reason?: string;
+            /**
              * @description En un chat, un mensaje nuevo del usuario deja `expired` la propuesta
              *     pendiente ANTES de procesarse (sale de `pendingIntentIds`; confirmarla da
              *     `409 intent_not_pending`). No la expiran un «sí» escrito ni los comandos de
@@ -11191,6 +11889,10 @@ export interface components {
              *     `expired`) las propuestas pendientes del chat, también las de reintento,
              *     lo mismo que `POST /chats/{chatId}/intents/{intentId}/dismiss` con cada
              *     una.
+             *
+             *     Corte 35 (propuesto; con `auto_execute`): un mensaje nuevo ya no deja
+             *     `expired` una intención con `reason`, salvo que Flu entienda que el mensaje
+             *     la reemplaza (otro pedido sobre lo mismo); en ese caso lo dice.
              * @enum {string}
              */
             state: "pending" | "confirmed" | "dismissed" | "expired";
@@ -11552,6 +12254,16 @@ export interface components {
             deliverableCard?: components["schemas"]["DeliverableCard"];
             clarification?: components["schemas"]["Clarification"];
             activityGroup?: components["schemas"]["ActivityGroup"];
+            /**
+             * @description Corte 35 (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+             *     Salvador lo acepte, de despliegue y habilitado por cuenta). Solo en
+             *     partes `text` y `table` que salen de un contenido que produjo Flu (un
+             *     análisis, una tabla, un resumen): ese contenido, con su versión, para
+             *     convertirlo después en documento o exportarlo SIN regenerarlo. Se pide con
+             *     un mensaje normal que apunta a la parte (`ChatMessageRequest.target`,
+             *     `kind: message_part`). Ausente en las demás.
+             */
+            contentRef?: components["schemas"]["ContentRef"];
         };
         /**
          * @description Una tabla Markdown del texto de Flu, ya partida. Los valores van como TEXTO ya
@@ -11659,8 +12371,8 @@ export interface components {
              *     - `proposed`: quedó una propuesta pendiente de confirmar (`reply.intent`).
              *     - `launched`: se puso en marcha al menos un trabajo sin pedir confirmación
              *       (`reply.refs.jobIds`).
-             *     - `asked`: Flu necesita un dato para seguir (`clarification` o
-             *       `question_group`).
+             *     - `asked`: Flu necesita un dato para seguir (`clarification`,
+             *       `question_group` o, corte 34, `orchestrator_question`).
              *     - `failed`: no se pudo atender el pedido; `failure` dice por qué. Nunca un
              *       `answered` que en realidad no hizo lo pedido.
              *     - `cancelled`: el turno se detuvo (`POST /chats/{chatId}/turns/{turnId}/cancel`).
@@ -11772,6 +12484,25 @@ export interface components {
              *     habilitar para la cuenta, se acepta y se ignora.
              */
             attachmentIds?: string[];
+            /**
+             * @description Corte 35 (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+             *     Salvador lo acepte, de despliegue y habilitado por cuenta con
+             *     `edit_message`). «Editar» el ÚLTIMO mensaje del usuario: este mensaje lo
+             *     reemplaza y Flu responde de nuevo. Las respuestas posteriores al
+             *     reemplazado salen de la vista y se conservan como alternativas
+             *     (`ConsultationMessage.replacedMessageId`); los trabajos todavía activos
+             *     de ese turno se cancelan y lo ya publicado se conserva. Otro que no sea el
+             *     último: `409 not_last_message`.
+             */
+            replacesMessageId?: string;
+            /**
+             * @description Corte 35 (propuesto; `fragment_edit`). A qué se refiere el mensaje: un
+             *     fragmento de una versión de un entregable (un párrafo, una fila, un
+             *     elemento del diagrama) o una parte de un mensaje anterior de Flu. El
+             *     cambio se aplica solo ahí. Si el fragmento ya no existe en la versión
+             *     vigente: `409 anchor_stale`.
+             */
+            target?: components["schemas"]["MessageTarget"];
         };
         /** @description Un modelo que el usuario puede elegir (`GET /models`). Nunca hay un «auto». */
         ModelInfo: {
@@ -11815,8 +12546,8 @@ export interface components {
              *     - `proposed`: quedó una propuesta pendiente de confirmar (`reply.intent`).
              *     - `launched`: se puso en marcha al menos un trabajo sin pedir confirmación
              *       (`reply.refs.jobIds`).
-             *     - `asked`: Flu necesita un dato para seguir (`clarification` o
-             *       `question_group`).
+             *     - `asked`: Flu necesita un dato para seguir (`clarification`,
+             *       `question_group` o, corte 34, `orchestrator_question`).
              *     - `failed`: no se pudo atender el pedido; `failure` dice por qué. Nunca un
              *       `answered` que en realidad no hizo lo pedido.
              *     - `cancelled`: el turno se detuvo (`POST /chats/{chatId}/turns/{turnId}/cancel`).
@@ -11843,9 +12574,23 @@ export interface components {
              *     `requestId` es el de los `chain.block` y los `activity.*` de su cadena en
              *     `GET /chats/{chatId}/events-stream`, para colgarlos de esta respuesta.
              *     Opaco. Ausente en cualquier otro turno; nunca `null`.
+             *
+             *     **Alcance de `requestId` (corte 34).** Una solicitud puede durar varios
+             *     turnos. El turno que contesta una pregunta abierta del orquestador
+             *     (`OrchestratorQuestion`, la última abierta del chat) CONTINÚA la misma
+             *     solicitud: lleva el MISMO `requestId`, `continues: true` y
+             *     `answeredQuestionId`; sus bloques siguen la numeración (`seq`) de la cadena.
+             *     Cualquier otro mensaje abre una solicitud nueva, con otro `requestId`; si
+             *     había una pregunta abierta, queda `withdrawn` si el modelo cambió.
              */
             nucleo?: {
                 requestId: string;
+                /** @description Corte 34. Solo `true`: este turno continúa una solicitud anterior (la respuesta a su pregunta). Ausente = solicitud nueva; nunca `false`. */
+                continues?: boolean;
+                /** @description Corte 34. Con `continues: true`: la pregunta que contestó el mensaje del usuario. */
+                answeredQuestionId?: string;
+                /** @description Corte 34. Los objetivos de la solicitud al terminar este turno, en orden. Siempre al menos uno (`o1`). */
+                objectives?: components["schemas"]["NucleoObjective"][];
             };
             userMessage: components["schemas"]["ConsultationMessage"];
             reply: components["schemas"]["ConsultationMessage"];
@@ -11897,8 +12642,8 @@ export interface components {
              *     - `proposed`: quedó una propuesta pendiente de confirmar (`reply.intent`).
              *     - `launched`: se puso en marcha al menos un trabajo sin pedir confirmación
              *       (`reply.refs.jobIds`).
-             *     - `asked`: Flu necesita un dato para seguir (`clarification` o
-             *       `question_group`).
+             *     - `asked`: Flu necesita un dato para seguir (`clarification`,
+             *       `question_group` o, corte 34, `orchestrator_question`).
              *     - `failed`: no se pudo atender el pedido; `failure` dice por qué. Nunca un
              *       `answered` que en realidad no hizo lo pedido.
              *     - `cancelled`: el turno se detuvo (`POST /chats/{chatId}/turns/{turnId}/cancel`).
@@ -12029,8 +12774,21 @@ export interface components {
              *     cualquier otro caso; nunca `null`.
              */
             waitingFor?: components["schemas"]["JobWaitingFor"];
-            /** @description Corte 33 (aditivo; habilitado por cuenta, pendiente de despliegue). Solo en el elemento de un job de una cadena del núcleo (`events-stream`): la solicitud (`ConsultationExchange.nucleo.requestId`, el de sus `chain.block`). Su `activityId` es entonces el `blockId` del bloque `activity`. Ausente en cualquier otro paso. */
+            /** @description Corte 33 (aditivo; habilitado por cuenta, pendiente de despliegue). Solo en el elemento de un job de una cadena del núcleo (`events-stream`): la solicitud (`ConsultationExchange.nucleo.requestId`, el de sus `chain.block`). Su `activityId` es entonces el `blockId` del bloque `activity`. Ausente en cualquier otro paso. Corte 34: también en el elemento de una operación SIN job (`operationId`). */
             requestId?: string;
+            /**
+             * @description Corte 34 (aditivo; habilitado por cuenta, pendiente de despliegue). Solo en
+             *     el elemento de una operación del núcleo que corre EN PROCESO, sin job (p. ej.
+             *     modificar o renderizar un diagrama: su base ya es contenido de la solicitud).
+             *     Va siempre con `requestId` y nunca con `jobId`. La correlación es
+             *     (`requestId`, `operationId`): `operationId` es estable y opaco, único en su
+             *     solicitud, y el `activityId` es el `blockId` de su bloque `activity`, como en
+             *     los de un job. Una operación sin job emite `activity.start`,
+             *     `activity.heartbeat` (con `stage` y `label` cuando cambia de etapa: no emite
+             *     `activity.update`, que exige `jobId`) y `activity.end` (`folded: true`).
+             *     Ausente en cualquier otro paso.
+             */
+            operationId?: string;
             /** @description Corte 33 (aditivo; habilitado por cuenta, pendiente de despliegue). Solo con `requestId`: la etapa del job (un código interno estable, p. ej. `leyendo_fuentes`, `estructurando`, `validando`, o su estado si no tiene etapa). ENUM ABIERTO: el front pinta la `label`; `stage` solo sirve para saber si la etapa cambió. */
             stage?: string;
             /** @description Corte 33 (aditivo; habilitado por cuenta, pendiente de despliegue). Solo con `requestId`: lo que produce el job, en palabras («el diagrama del proceso en inglés»), el título del elemento. */
@@ -12054,6 +12812,8 @@ export interface components {
             replyId?: string;
             /** @description Corte 33: como en `activity.start`. */
             requestId?: string;
+            /** @description Corte 34: como en `activity.start`. */
+            operationId?: string;
             /** @description Corte 33 (aditivo; habilitado por cuenta, pendiente de despliegue). Solo con `requestId`: siempre `true`, el elemento de la cadena se pliega. */
             folded?: boolean;
             /** @description Corte 33 (aditivo; habilitado por cuenta, pendiente de despliegue). Solo con `requestId`: las etapas por las que pasó el job, en orden (una por etapa; la cuenta de una etapa larga es la de su última `label`). En este evento todas llevan su `ms`. */
@@ -12095,6 +12855,8 @@ export interface components {
             };
             /** @description Corte 33: como en `activity.start`. */
             requestId?: string;
+            /** @description Corte 34: como en `activity.start`. En una operación sin job, el latido también avisa del cambio de etapa (`stage` y `label` nuevos). */
+            operationId?: string;
             /** @description Corte 33: como en `activity.start`; la etapa que sigue en curso. */
             stage?: string;
             /** @description Como en `activity.start`. */
@@ -12142,6 +12904,127 @@ export interface components {
             /** @description Como en `activity.start` (con el latido real): la nueva etapa es una espera y se sabe a qué. Ausente en cualquier otro caso; nunca `null`. */
             waitingFor?: components["schemas"]["JobWaitingFor"];
         };
+        /**
+         * @description Corte 34 (aditivo; habilitado por cuenta, pendiente de despliegue). Una pregunta
+         *     del núcleo del agente: una DECISIÓN EXPLÍCITA del orquestador de pedir al
+         *     usuario lo que falta, no un texto que acaba en «?». No es la confirmación de una
+         *     propuesta (eso sigue siendo `intent_to_confirm` y su botón).
+         *
+         *     - La solicitud (`requestId`) se conserva con sus objetivos. Solo esperan los
+         *       objetivos de `objectiveIds`; las operaciones independientes siguen.
+         *     - Se contesta con un mensaje normal (`POST /chats/{chatId}/messages` o
+         *       `…/messages-stream`). El siguiente mensaje del usuario en el chat contesta la
+         *       ÚLTIMA pregunta abierta, y la solicitud continúa con el MISMO `requestId`
+         *       (ver `ConsultationExchange.nucleo`).
+         *     - Si el usuario cambia de modelo antes de contestar, la pregunta queda
+         *       `withdrawn` y su mensaje abre una solicitud nueva: una solicitud nunca cambia
+         *       de modelo.
+         *     - Corte 35 (propuesto por David el 6-nov-2026; pendiente de que Salvador lo
+         *       acepte y de despliegue): como mucho UNA ronda de preguntas por solicitud
+         *       antes de producir algo. Cada pregunta ofrece opciones concretas y, en
+         *       `decideForMe`, una salida («Decide tú») con el supuesto que aplicará. Nunca
+         *       pregunta lo que ya está en la conversación, en los materiales del chat o en
+         *       la memoria.
+         * @example {
+         *       "questionId": "7d1e5c2a-0b6f-4c1d-9e8a-3f2b1c0d9e8f:c2",
+         *       "requestId": "7d1e5c2a-0b6f-4c1d-9e8a-3f2b1c0d9e8f",
+         *       "reason": "material_ambiguity",
+         *       "question": "¿De cuál de los dos procedimientos saco el diagrama?",
+         *       "objectiveIds": [
+         *         "o1"
+         *       ],
+         *       "answerKind": "choice",
+         *       "choices": [
+         *         {
+         *           "label": "Procedimiento de cobranza (v3)",
+         *           "value": "src_cobranza",
+         *           "ref": {
+         *             "kind": "source",
+         *             "id": "3a7c0e1f-0000-4000-8000-00000000c0b1",
+         *             "versionId": "12"
+         *           }
+         *         },
+         *         {
+         *           "label": "Procedimiento de tesorería (v1)",
+         *           "value": "src_tesoreria",
+         *           "ref": {
+         *             "kind": "source",
+         *             "id": "3a7c0e1f-0000-4000-8000-00000000c0b2",
+         *             "versionId": "4"
+         *           }
+         *         }
+         *       ],
+         *       "allowFreeText": true,
+         *       "required": true,
+         *       "state": "open"
+         *     }
+         */
+        OrchestratorQuestion: {
+            /** @description Estable y opaco. Único en su solicitud. */
+            questionId: string;
+            /** @description La solicitud que espera la respuesta (`ConsultationExchange.nucleo.requestId`). */
+            requestId: string;
+            /** @description `material_ambiguity` (no se sabe de qué material partir) o `missing_fact` (falta un dato). ENUM ABIERTO. */
+            reason: string;
+            /** @description La pregunta, en palabras del usuario. Es la última frase de `text`. */
+            question: string;
+            /** @description Los objetivos de la solicitud que esperan la respuesta (`ConsultationExchange.nucleo.objectives`). */
+            objectiveIds: string[];
+            /**
+             * @description `choice`: hay `choices` para elegir (y se acepta también texto libre si `allowFreeText`). `free_text`: se contesta escribiendo; sin `choices`.
+             * @enum {string}
+             */
+            answerKind: "choice" | "free_text";
+            /** @description Solo con `answerKind: choice`. Ausente en `free_text`; nunca vacío. */
+            choices?: components["schemas"]["OrchestratorQuestionChoice"][];
+            /** @description Hoy siempre `true`: el usuario puede contestar con sus palabras aunque haya `choices`. */
+            allowFreeText?: boolean;
+            /**
+             * @description `true`: los objetivos de `objectiveIds` NO siguen sin la respuesta (lo demás
+             *     sí). `false`: Flu puede seguir con un supuesto que dice en `text` si no se
+             *     contesta. Hoy el núcleo solo emite `true`.
+             */
+            required: boolean;
+            /** @description `open` (esperando), `answered` (la contestó el mensaje `answerMessageId`) o `withdrawn` (retirada: otro modelo, o la solicitud terminó sin ella). ENUM ABIERTO. */
+            state: string;
+            /** @description Con `state: answered`: el `id` (`m_N`) del mensaje del usuario que la contestó. Ausente en otro caso. */
+            answerMessageId?: string;
+            /**
+             * @description Corte 35 (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+             *     Salvador lo acepte, de despliegue y habilitado por cuenta). La salida
+             *     «Decide tú»: si el usuario contesta con su `label`, Flu sigue con
+             *     `assumption` y lo dice en `ConsultationMessage.assumptions`. Ausente si la
+             *     pregunta no admite un supuesto razonable.
+             */
+            decideForMe?: components["schemas"]["DecideForMe"];
+        };
+        /** @description Corte 34 (aditivo). Una opción de `OrchestratorQuestion.choices`. Para contestar, el front puede mandar `label` como texto del mensaje. */
+        OrchestratorQuestionChoice: {
+            label: string;
+            /** @description Opaco y estable dentro de la pregunta. */
+            value: string;
+            /** @description Si la opción es un material: cuál, con la versión fijada (salvo un mensaje). */
+            ref?: {
+                /** @description ENUM ABIERTO. */
+                kind: string;
+                id: string;
+                versionId?: string;
+            };
+        };
+        /**
+         * @description Corte 34 (aditivo; habilitado por cuenta, pendiente de despliegue). Un objetivo
+         *     de una solicitud del núcleo. Sin objetivos declarados por el orquestador, la
+         *     solicitud tiene uno, `o1` («lo que pide el mensaje»).
+         */
+        NucleoObjective: {
+            objectiveId: string;
+            /** @description En palabras del usuario. */
+            description: string;
+            /** @description `true`: lo pidió el usuario. `false`: lo sugiere Flu; lo que lo publique sale con `notRequested: true` y nunca se lanza sin su botón. */
+            requested: boolean;
+            /** @description ENUM ABIERTO. */
+            state: string;
+        };
         /** @description Corte 33 (aditivo; habilitado por cuenta, pendiente de despliegue). Una etapa del job de un elemento de la cadena del núcleo. */
         ChainActivityStage: {
             /** @description Como `activity.start.stage`. */
@@ -12157,8 +13040,26 @@ export interface components {
             activityId: string;
             /** @description Lo que produjo el job («el diagrama del proceso en inglés»), como `activity.start.title`. */
             label: string;
-            /** @description Cómo terminó: `done`, `failed` o `cancelled`; `needs_user_input` si quedó pendiente de una confirmación. ENUM ABIERTO. */
+            /**
+             * @description Cómo terminó: `done`, `failed` o `cancelled`.
+             *     Corte 34 separa las dos esperas:
+             *     - `needs_confirmation`: quedó pendiente de una CONFIRMACIÓN (el botón de una
+             *       propuesta);
+             *     - `waiting_user`: espera la respuesta a una PREGUNTA del orquestador
+             *       (`OrchestratorQuestion`; `questionId` dice cuál).
+             *     `needs_user_input` es el valor del corte 33 y significa lo mismo que
+             *     `needs_confirmation`; el backend deja de emitirlo cuando emite los dos
+             *     nuevos. ENUM ABIERTO.
+             */
             state: string;
+            /** @description Corte 34. Solo con `state: waiting_user`: la pregunta (`OrchestratorQuestion.questionId`). */
+            questionId?: string;
+            /** @description Corte 34. Los objetivos de la solicitud a los que sirve este elemento. */
+            objectiveIds?: string[];
+            /** @description Corte 34. Solo `true`: el elemento sirve solo a objetivos que el usuario NO pidió (los sugirió Flu). Ausente = pedido; nunca `false`. */
+            notRequested?: boolean;
+            /** @description Corte 34. Solo en un elemento sin job (una operación en proceso, ver `activity.start.operationId`). Ausente si tiene job. */
+            operationId?: string;
             stages: components["schemas"]["ChainActivityStage"][];
         };
         /**
@@ -12174,6 +13075,10 @@ export interface components {
          *       `deliverableCard`); lleva `jobId` y `deliverableId`.
          *     - `activity` no sale como `chain.block` (sale como `activity.*` con
          *       `activityId` = su `blockId`), pero ocupa su `seq` en la secuencia.
+         *     - Corte 34. `question`: `messageId` es el mensaje de Flu con
+         *       `kind: orchestrator_question`; lleva `questionId` y `state: waiting_user`. La
+         *       cadena sigue después de la respuesta del usuario, con el mismo `requestId` y
+         *       `seq` a continuación (los bloques del turno que contesta van detrás).
          * @example {
          *       "requestId": "7d1e5c2a-0b6f-4c1d-9e8a-3f2b1c0d9e8f",
          *       "blockId": "7d1e5c2a-0b6f-4c1d-9e8a-3f2b1c0d9e8f:explanation",
@@ -12226,9 +13131,15 @@ export interface components {
             /** @description El orden del bloque en su solicitud, desde 1, sin huecos entre los bloques de la solicitud (incluidos los `activity`). Fijo. */
             seq: number;
             /** @enum {string} */
-            kind: "plan" | "activity" | "deliverable" | "transition" | "explanation";
-            /** @description `true` solo en `explanation`: el final de la solicitud. */
+            kind: "plan" | "activity" | "deliverable" | "transition" | "explanation" | "question";
+            /** @description `true` solo en `explanation`: el final de la solicitud. Corte 34: una `explanation` con `state: waiting_user` lleva `final: false` (cierra lo hecho mientras se espera la respuesta; la final llega después con el mismo `requestId`). */
             final: boolean;
+            /** @description Corte 34. En `question`: la pregunta (`OrchestratorQuestion.questionId`). Ausente en los demás. */
+            questionId?: string;
+            /** @description Corte 34. En `deliverable` y `question`: los objetivos de la solicitud a los que sirve (`ConsultationExchange.nucleo.objectives`). Ausente en los demás. */
+            objectiveIds?: string[];
+            /** @description Corte 34. Solo en `deliverable` y solo `true`: lo publicado sirve solo a objetivos que el usuario NO pidió (lo sugirió Flu y se lanzó con su botón). Ausente = pedido; nunca `false`. */
+            notRequested?: boolean;
             /** @description El `id` (`m_N`) del `message` que este bloque coloca. */
             messageId: string;
             /** @description En `deliverable`: el job que dejó la tarjeta. Ausente en los demás. */
@@ -12236,10 +13147,10 @@ export interface components {
             /** @description En `deliverable`: el entregable de la tarjeta. Ausente en los demás (y si la tarjeta no lo trae). */
             deliverableId?: string;
             /**
-             * @description Solo en `explanation`: `completed` (todo lo pedido está disponible), `partial` (algo sí y algo no) o `failed` (nada). Ausente en los demás.
+             * @description Solo en `explanation`: `completed` (todo lo pedido está disponible), `partial` (algo sí y algo no) o `failed` (nada). Corte 34: `waiting_user` en `question`, y en una `explanation` no final (`final: false`) que cierra lo hecho mientras la solicitud espera una respuesta. Ausente en los demás.
              * @enum {string}
              */
-            state?: "completed" | "partial" | "failed";
+            state?: "completed" | "partial" | "failed" | "waiting_user";
             /** @description Solo en `explanation`: el resumen plegado de los elementos de actividad de la solicitud, en orden. Ausente si no hubo ninguno. */
             activities?: components["schemas"]["ChainActivitySummary"][];
         };
@@ -12265,7 +13176,7 @@ export interface components {
             deliverableId: string;
             version: number;
         };
-        /** @description `part.start` (fase B): empieza una parte de la respuesta ya validada, en el orden de `message.reply.parts` (o, sin partes, una sola de texto). */
+        /** @description `part.start` (fase B): empieza una parte de la respuesta ya validada, en el orden de `message.reply.parts` (o, sin partes, una sola de texto). Corte 35 (pregunta abierta para Salvador): `MessagePart.kind` incluye `activity_group` y este `kind` no; si una parte `activity_group` nunca sale en el stream (sus pasos llegan como `activity.*`), conviene decirlo aquí; si sí sale, falta en el enum. Con `stream_text` (corte 35), una parte `text` puede llegar como `text.delta` y `part.replace` además de `text.block`. */
         ChatStreamPartStart: {
             partId: string;
             index: number;
@@ -12379,6 +13290,14 @@ export interface components {
                 unitId: string;
                 deliverableId?: string;
             };
+            /**
+             * @description Corte 35 (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+             *     Salvador lo acepte, de despliegue y habilitado por cuenta con
+             *     `chat_search`). Solo en una lista pedida con `q` y solo si el chat
+             *     coincide por sus mensajes: hasta tres, del más reciente al más antiguo.
+             *     Ausente si solo coincide el título; nunca vacío.
+             */
+            matches?: components["schemas"]["ChatSearchMatch"][];
         };
         /**
          * @description Un chat en `GET /me/chats` (la barra lateral): los campos de `Chat`, con el
@@ -12423,6 +13342,8 @@ export interface components {
              *     SIEMPRE presente: `null` en un chat suelto (`unassigned: true`).
              */
             projectName: string | null;
+            /** @description Corte 35 (propuesto; `chat_search`). Como en `Chat`: solo con `q` y solo si coincide por sus mensajes. */
+            matches?: components["schemas"]["ChatSearchMatch"][];
         };
         /**
          * @description Una página de `GET /me/chats`. Misma paginación que las demás listas.
@@ -12798,6 +13719,215 @@ export interface components {
         SlashCommandList: {
             commands: components["schemas"]["SlashCommand"][];
         };
+        /**
+         * @description `text.delta` (corte 35, propuesto; `stream_text`): un fragmento del texto de
+         *     una parte `text`, tal como lo entrega el proveedor, sin esperar al validador.
+         *     Concatenados en orden de `seq`, dan lo que lleva mostrado la parte. Puede
+         *     corregirse después con `part.replace`.
+         */
+        ChatStreamTextDelta: {
+            partId: string;
+            delta: string;
+            seq: number;
+            ms?: number;
+        };
+        /**
+         * @description `part.replace` (corte 35, propuesto; `stream_text`): el texto COMPLETO y
+         *     corregido de una parte ya mostrada. El front reemplaza la parte entera (no
+         *     añade) y puede decir por qué. Es la única excepción a «lo enviado nunca se
+         *     reescribe», y siempre es visible.
+         */
+        ChatStreamPartReplace: {
+            partId: string;
+            markdown: string;
+            /**
+             * @description Por qué se corrigió: `citation_invalid` (una cita que no existe o no
+             *     dice eso), `figure_without_source` (una cifra sin fuente) o `retry` (el
+             *     turno se reintentó y la parte cambió). ENUM ABIERTO.
+             */
+            reason: string;
+            seq: number;
+            ms?: number;
+        };
+        /** @description Corte 35 (propuesto). Un supuesto con el que Flu siguió («Supuse que aplica a compras menores a $50 000»). */
+        MessageAssumption: {
+            text: string;
+            /** @description Los objetivos de la solicitud a los que aplica (`ConsultationExchange.nucleo.objectives`, corte 34). Ausente si aplica a toda la respuesta. */
+            objectiveIds?: string[];
+        };
+        /** @description Corte 35 (propuesto). Un siguiente paso posible. El front escribe `prompt` en el compositor; nunca se ejecuta solo. */
+        MessageFollowUp: {
+            /** @description El texto del botón («Hacer el diagrama»). */
+            label: string;
+            /** @description Lo que se escribe en el compositor («Haz el diagrama del proceso con lo que acabamos de ver.»). */
+            prompt: string;
+        };
+        /** @description Corte 35 (propuesto). La salida «Decide tú» de una `OrchestratorQuestion`. */
+        DecideForMe: {
+            /** @description El texto del botón; hoy «Decide tú». Para contestar, el front manda `label` como texto del mensaje. */
+            label: string;
+            /** @description Lo que Flu hará si el usuario lo elige («Uso un ejemplo genérico de una empresa de servicios»). */
+            assumption: string;
+        };
+        /** @description Corte 35 (propuesto). Un contenido que produjo Flu (sin publicar como entregable), con su versión. Opaco para el front. */
+        ContentRef: {
+            contentId: string;
+            version: number;
+        };
+        /**
+         * @description Corte 35 (propuesto; `fragment_edit`). A qué se refiere un mensaje del usuario.
+         *     Lleva SOLO los campos de su `kind`:
+         *
+         *         deliverable    deliverableId, versionId y anchor (un fragmento de esa versión)
+         *         message_part   messageId y partIndex (una parte de un mensaje de Flu)
+         *
+         *     Un campo de otro `kind`, o uno que falta: `400 validation_failed`.
+         */
+        MessageTarget: {
+            /** @enum {string} */
+            kind: "deliverable" | "message_part";
+            deliverableId?: string;
+            /** @description La versión que tenía abierta el usuario al señalar. Si ya no es la vigente y el ancla no existe en la vigente, `409 anchor_stale`. */
+            versionId?: string;
+            anchor?: components["schemas"]["MessageTargetAnchor"];
+            /** @description Un mensaje de Flu de este chat. */
+            messageId?: string;
+            /** @description La posición de la parte en `ConsultationMessage.parts`. */
+            partIndex?: number;
+        };
+        /**
+         * @description Corte 35 (propuesto). Dónde está el fragmento dentro de la versión:
+         *
+         *     - `section`: una sección entera (`id` = su ruta de títulos);
+         *     - `text_range`: un rango de texto dentro de una sección (`id` = la sección,
+         *       `start` y `end` en caracteres de su texto, `quote` el texto señalado);
+         *     - `cell_range`: celdas de una tabla u hoja (`id` = la hoja o la tabla, `start`
+         *       y `end` como `A2`/`C5` en `quote`);
+         *     - `bpmn_element`: un elemento del diagrama (`id` = su id estable);
+         *     - `slide`: una diapositiva (`id` = su número).
+         *
+         *     `quote` sirve para comprobar que el fragmento sigue igual. ENUM ABIERTO.
+         */
+        MessageTargetAnchor: {
+            type: string;
+            id?: string;
+            start?: number;
+            end?: number;
+            quote?: string;
+        };
+        /** @description Corte 35 (propuesto). El cuerpo de `POST /chats/{chatId}/messages/{messageId}/regenerate`. */
+        RegenerateRequest: {
+            /** @description Idempotencia: repetirlo devuelve la misma alternativa. */
+            clientMessageId: string;
+            /** @description Opcional: regenerar con otro modelo, con las reglas de `ChatMessageRequest.model`. */
+            model?: string;
+        };
+        /** @description Corte 35 (propuesto). `GET /chats/{chatId}/messages/{messageId}/alternatives`. */
+        MessageAlternatives: {
+            /** @description La respuesta original del grupo (`alternativeOf`). */
+            messageId: string;
+            /** @description En orden de `alternativeIndex`. La última es la vigente. */
+            alternatives: components["schemas"]["ConsultationMessage"][];
+        };
+        /** @description Corte 35 (propuesto; `feedback`). La valoración del autor sobre un mensaje de Flu. */
+        MessageFeedback: {
+            /** @enum {string} */
+            rating: "up" | "down";
+            /**
+             * @description Solo con `down`, opcional: `invented_fact` (inventó un dato),
+             *     `ignored_source` (no usó mi archivo), `wrong_material` (usó otro
+             *     material), `incomplete` (no hizo todo lo pedido), `too_slow` (tardó) u
+             *     `other`. ENUM ABIERTO.
+             */
+            reason?: string;
+            comment?: string;
+        };
+        /**
+         * @description Corte 35 (propuesto). Qué cambió de `againstVersionId` a `versionId`. Las tres listas pueden venir vacías (versiones iguales).
+         * @example {
+         *       "kind": "sections",
+         *       "versionId": "124937",
+         *       "againstVersionId": "124936",
+         *       "changeSummary": "Agregué la sección de riesgos y pasé la introducción a un tono formal.",
+         *       "added": [
+         *         {
+         *           "id": "Riesgos",
+         *           "label": "Riesgos",
+         *           "after": "Los principales riesgos del proceso son…"
+         *         }
+         *       ],
+         *       "removed": [],
+         *       "changed": [
+         *         {
+         *           "id": "Introducción",
+         *           "label": "Introducción",
+         *           "before": "Este documento explica…",
+         *           "after": "El presente documento establece…"
+         *         }
+         *       ]
+         *     }
+         */
+        VersionDiff: {
+            /** @description `sections` (texto, por secciones), `diagram_elements` (diagrama, por elementos) o `rows` (tablas). ENUM ABIERTO. */
+            kind: string;
+            versionId: string;
+            againstVersionId: string;
+            /** @description El `Version.changeSummary` de `versionId`, si lo tiene. */
+            changeSummary?: string;
+            added: components["schemas"]["VersionDiffEntry"][];
+            removed: components["schemas"]["VersionDiffEntry"][];
+            changed: components["schemas"]["VersionDiffEntry"][];
+        };
+        /** @description Corte 35 (propuesto). Un elemento que cambió: en `added` solo lleva `after`; en `removed`, solo `before`; en `changed`, los dos. */
+        VersionDiffEntry: {
+            /** @description Estable: la ruta de títulos de una sección, el id de un elemento BPMN o la clave de una fila. */
+            id: string;
+            /** @description Cómo mostrarlo («Paso 3 · Aprobar compra»). */
+            label?: string;
+            /** @description El contenido anterior, en Markdown o texto (recortado a ~2000 caracteres). */
+            before?: string;
+            /** @description El contenido nuevo, igual. */
+            after?: string;
+        };
+        /** @description Corte 35 (propuesto). El cuerpo de `PATCH /projects/{projectId}/deliverables/{deliverableId}`. */
+        UpdateDeliverableRequest: {
+            archived: boolean;
+        };
+        /**
+         * @description Corte 35 (propuesto; `project_instructions`). Entran al contexto de cada chat
+         *     del proyecto como INSTRUCCIÓN, separadas de los materiales: una instrucción
+         *     escrita dentro de un documento no las sustituye.
+         */
+        ProjectInstructions: {
+            text: string;
+            version: number;
+            /** Format: date-time */
+            updatedAt: string;
+            updatedBy?: string;
+        };
+        /** @description Corte 35 (propuesto; `chat_search`). Un mensaje del chat donde aparece lo buscado. */
+        ChatSearchMatch: {
+            messageId: string;
+            /** @description Un fragmento del mensaje alrededor de lo buscado. */
+            snippet: string;
+        };
+        /** @description `job.finished` (corte 35, propuesto; `GET /me/events-stream`): terminó un trabajo que lanzó el usuario. */
+        UserEventJobFinished: {
+            jobId: string;
+            chatId: string;
+            projectId?: string;
+            /** @description `done`, `failed` o `cancelled`. ENUM ABIERTO. */
+            status: string;
+            deliverableIds?: string[];
+            /** @description Qué terminó, para el aviso («Diagrama · Alta de proveedores»). */
+            title?: string;
+        };
+        /** @description `reply.ready` (corte 35, propuesto; `GET /me/events-stream`): hay una respuesta nueva de Flu en un chat del usuario. */
+        UserEventReplyReady: {
+            chatId: string;
+            messageId: string;
+            projectId?: string;
+        };
     };
     responses: {
         /**
@@ -12868,6 +13998,16 @@ export interface components {
         Limit: number;
         UnitId: string;
         ChatId: string;
+        /** @description Corte 35 (propuesto). El `id` de un mensaje del chat (`m_N`). */
+        MessageId: string;
+        /**
+         * @description Corte 35 (propuesto por David el 6-nov-2026; aditivo; pendiente de que
+         *     Salvador lo acepte, de despliegue y habilitado por cuenta con `chat_search`).
+         *     Texto a buscar en el título y los mensajes de los chats, sin distinguir
+         *     mayúsculas ni acentos. De 2 a 200 caracteres (fuera de rango,
+         *     `400 validation_failed`). Sin la capacidad, se ignora.
+         */
+        ChatSearchQuery: string;
         /** @description Puntero a la página siguiente (el `nextCursor` de la respuesta anterior). */
         Cursor: string;
     };
